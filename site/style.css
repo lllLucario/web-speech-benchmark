@@ -94,6 +94,13 @@ dl { display: grid; grid-template-columns: minmax(5rem, 9rem) 1fr; gap: .4rem .8
 dt { font-weight: 650; }
 dd { margin: 0; overflow-wrap: anywhere; }
 .footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .4rem 1rem; border-top: 1px solid var(--line); margin-top: 2.5rem; padding: .9rem 0 1.3rem; color: var(--quiet); font-size: .81rem; }
+.result-tabs { display: flex; flex-wrap: wrap; gap: .4rem; border-bottom: 1px solid var(--line); margin-bottom: 1rem; }
+.result-tabs button { border-radius: .3rem .3rem 0 0; }
+.result-tabs button[aria-selected=true] { color: var(--white); background: var(--olive); border-color: var(--olive); }
+.scoring-link { display: inline-block; margin-top: .6rem; }
+.scoring-rules { margin-block: .6rem; padding-inline-start: 1.25rem; }
+.scoring-rules li + li { margin-top: .4rem; }
+.scoring-code { overflow: auto; max-height: 24rem; padding: .75rem; background: var(--white); border: 1px solid var(--line); }
 .toolbar { margin-bottom: 1rem; align-items: end; }
 .toolbar label { max-width: 100%; }
 .file-button { display: inline-flex; align-items: center; position: relative; }

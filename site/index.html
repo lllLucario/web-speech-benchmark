@@ -87,6 +87,7 @@
       <section class="ruled" aria-labelledby="accuracy-title">
         <div class="section-heading"><h2 id="accuracy-title">Accuracy</h2><p>Scores use the original browser transcript. WER counts English words. MER counts each Han character and each English word as one token. Accuracy = 1 − error rate. Critical terms use lexical phrase matching.</p></div>
         <div id="accuracy"></div>
+        <a class="scoring-link" href="#results/scoring">Open Scoring Lab →</a>
         <div class="actions save-row">
           <button id="run-json" type="button" disabled>Run JSON</button><button id="run-csv" type="button" disabled>Run CSV</button>
           <button id="event-json" type="button" disabled>Events JSON</button><button id="event-csv" type="button" disabled>Events CSV</button>
@@ -123,13 +124,48 @@
     </section>
     <section id="results" hidden aria-labelledby="results-title">
       <div class="intro"><h1 id="results-title">Benchmark results</h1><p>Review saved attempts and compare sessions on this browser.</p></div>
-      <div class="actions toolbar">
-        <label>Session<select id="history-select"></select></label>
-        <button id="session-json" type="button">Sessions JSON</button><button id="session-csv" type="button">Sessions CSV</button>
-        <button id="aggregate-json" type="button">Metrics JSON</button><button id="aggregate-csv" type="button">Metrics CSV</button>
+      <div class="result-tabs" role="tablist" aria-label="Results views">
+        <button id="tab-history" type="button" role="tab" aria-selected="true" aria-controls="panel-history">Results</button>
+        <button id="tab-scoring" type="button" role="tab" aria-selected="false" aria-controls="panel-scoring" tabindex="-1">Scoring Lab</button>
       </div>
-      <label class="check"><input type="checkbox" id="compare-sessions" checked> Compare saved sessions</label>
-      <div id="history"></div>
+      <div id="panel-history" role="tabpanel" aria-labelledby="tab-history" tabindex="0">
+        <div class="actions toolbar">
+          <label>Session<select id="history-select"></select></label>
+          <button id="session-json" type="button">Sessions JSON</button><button id="session-csv" type="button">Sessions CSV</button>
+          <button id="aggregate-json" type="button">Metrics JSON</button><button id="aggregate-csv" type="button">Metrics CSV</button>
+        </div>
+        <label class="check"><input type="checkbox" id="compare-sessions" checked> Compare saved sessions</label>
+        <div id="history"></div>
+      </div>
+      <div id="panel-scoring" role="tabpanel" aria-labelledby="tab-scoring" tabindex="0" hidden>
+        <section aria-labelledby="scoring-rules-title">
+          <h2 id="scoring-rules-title">How scoring works</h2>
+          <ul class="scoring-rules">
+            <li><strong>WER / MER.</strong> English references use word error rate. References with Han characters use mixed error rate, counting each Han character and each English word as one unit. Error rate = (substitutions + deletions + insertions) ÷ reference units. Accuracy = 1 − error rate.</li>
+            <li><strong>Normalized is the default.</strong> Both modes ignore case and punctuation. Normalized also maps English number words zero–twenty to digits and skips the configured fillers for WER and MER. For example, <code>two coffees</code> and <code>2 coffees</code> score the same.</li>
+            <li><strong>Critical phrases.</strong> Each phrase must appear as a contiguous sequence of units. Normalized applies the same number rules here and keeps fillers. The match rate is the number of phrases found divided by the number checked.</li>
+            <li><strong>Recognition success.</strong> A run needs a non-blank original final transcript, a normal end and no recorded errors. A failed run can still receive a score. With an empty transcript and a scorable reference, the error rate is 100%.</li>
+            <li><strong>Latency.</strong> Results show time between browser events separately from accuracy. Missing events show N/A and are excluded from latency averages and percentiles.</li>
+          </ul>
+          <p class="muted">Saved scores use the browser’s original final transcript. Your edits are saved separately.</p>
+        </section>
+        <section class="ruled" aria-labelledby="scoring-example-title">
+          <div class="section-heading"><h2 id="scoring-example-title">Try a comparison</h2><p>Change either text or the mode to see the score update.</p></div>
+          <div class="comparison">
+            <label>Reference<textarea id="lab-reference" rows="2" maxlength="1000">I’d like two coffees, no sugar.</textarea></label>
+            <label>Recognized text<textarea id="lab-transcript" rows="2" maxlength="1000">I'd like 2 coffees, no sugar.</textarea></label>
+            <label>Critical phrases <small>One per line</small><textarea id="lab-terms" rows="2" maxlength="300">two coffees
+no sugar</textarea></label>
+            <label>Evaluation mode<select id="lab-mode"><option value="normalized">Normalized</option><option value="strict">Strict</option></select></label>
+          </div>
+          <div id="lab-score"></div>
+        </section>
+        <details id="scoring-code-details" class="ruled">
+          <summary>Scoring source code</summary>
+          <p>See <code>tokenize</code>, <code>align</code>, <code>score</code> and <code>aggregate</code> in <a id="scoring-source-link" href="./benchmark.js" target="_blank" rel="noopener">benchmark.js</a>.</p>
+          <pre class="scoring-code" tabindex="0"><code id="scoring-code">Loading source…</code></pre>
+        </details>
+      </div>
     </section>
     <p id="notice" class="notice" role="status" hidden></p>
   </main>

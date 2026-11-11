@@ -101,7 +101,7 @@ function detailsList(entries) {
 const errorMetric = evaluation => evaluation.metric === 'MER' ? 'MER' : 'WER';
 const errorValue = evaluation => errorMetric(evaluation) === 'MER' ? evaluation.mer : evaluation.wer;
 
-function accuracyView(run) {
+function accuracyView(run, showTranscripts = true) {
   if (!run) return el('p', 'Finish a recognition attempt to compare it with the reference.', 'muted');
   const root = el('div');
   const evaluation = run.evaluation ?? score(run.reference, run.transcripts.final, run.criticalTerms, run.scoring);
@@ -112,11 +112,15 @@ function accuracyView(run) {
     metric(mixed ? 'Token accuracy' : 'Word accuracy', pct(evaluation.accuracy)),
     metric('Substitutions / Deletions / Insertions', [evaluation.substitution, evaluation.deletion, evaluation.insertion].join(' / ')),
     metric('Critical terms', evaluation.critical.length ? matched + ' / ' + evaluation.critical.length : 'N/A'));
-  const comparison = el('div', '', 'comparison');
-  for (const [title, value] of [['Reference', run.reference], ['Original transcript', run.transcripts.final || '—']]) {
-    const column = el('div');
-    column.append(el('h3', title), el('p', value, 'raw'));
-    comparison.append(column);
+  root.append(summary);
+  if (showTranscripts) {
+    const comparison = el('div', '', 'comparison');
+    for (const [title, value] of [['Reference', run.reference], ['Original transcript', run.transcripts.final || '—']]) {
+      const column = el('div');
+      column.append(el('h3', title), el('p', value, 'raw'));
+      comparison.append(column);
+    }
+    root.append(comparison);
   }
   const diff = el('div', '', 'diff');
   for (const { kind, ref, hyp } of evaluation.edits) {
@@ -125,7 +129,7 @@ function accuracyView(run) {
     token.title = kind;
     diff.append(token);
   }
-  root.append(summary, comparison, el('h3', (mixed ? 'Token' : 'Word') + ' alignment · ' + run.scoring.mode), diff);
+  root.append(el('h3', (mixed ? 'Token' : 'Word') + ' alignment · ' + run.scoring.mode), diff);
   if (evaluation.critical.length) {
     root.append(el('h3', 'Critical phrase matches'),
       el('p', evaluation.critical.map(item => (item.matched ? '✓ ' : '✗ ') + item.term).join(' · ')));
@@ -669,8 +673,50 @@ bind('aggregate-csv', () => {
   download('order-signal-metrics', rows, 'csv');
 });
 
+function renderScoringLab() {
+  const example = {
+    reference: $('lab-reference').value,
+    transcripts: { final: $('lab-transcript').value },
+    criticalTerms: $('lab-terms').value.split('\n'),
+    scoring: {
+      mode: $('lab-mode').value,
+      fillers: $('fillers').defaultValue.split(',').map(word => word.trim()).filter(Boolean)
+    }
+  };
+  $('lab-score').replaceChildren(accuracyView(example, false));
+}
+
+for (const id of ['lab-reference', 'lab-transcript', 'lab-terms', 'lab-mode']) bind(id, renderScoringLab, 'input');
+
+const resultTabs = { history: '#results', scoring: '#results/scoring' };
+for (const [tab, hash] of Object.entries(resultTabs)) {
+  bind('tab-' + tab, () => { location.hash = hash; });
+  bind('tab-' + tab, event => {
+    const next = { ArrowLeft: tab === 'history' ? 'scoring' : 'history', ArrowRight: tab === 'history' ? 'scoring' : 'history', Home: 'history', End: 'scoring' }[event.key];
+    if (!next) return;
+    event.preventDefault();
+    $('tab-' + next).focus();
+    location.hash = resultTabs[next];
+  }, 'keydown');
+}
+
+let sourceRequested = false;
+bind('scoring-code-details', async () => {
+  if (!$('scoring-code-details').open || sourceRequested) return;
+  sourceRequested = true;
+  try {
+    const response = await fetch($('scoring-source-link').href);
+    if (!response.ok) throw new Error('Could not load source');
+    $('scoring-code').textContent = await response.text();
+  } catch {
+    sourceRequested = false;
+    $('scoring-code').textContent = 'Could not load source. Reopen this section to retry.';
+  }
+}, 'toggle');
+
 function route() {
-  const view = ['bench', 'dataset', 'results'].find(id => '#' + id === location.hash) ?? 'bench';
+  const scoring = location.hash === resultTabs.scoring;
+  const view = scoring ? 'results' : ['bench', 'dataset', 'results'].find(id => '#' + id === location.hash) ?? 'bench';
   for (const link of document.querySelectorAll('nav [data-view]')) {
     const selected = link.dataset.view === view;
     $(link.dataset.view).hidden = !selected;
@@ -678,7 +724,16 @@ function route() {
     else link.removeAttribute('aria-current');
   }
   if (view === 'dataset') renderDataset();
-  if (view === 'results') renderHistory();
+  if (view === 'results') {
+    for (const tab of Object.keys(resultTabs)) {
+      const selected = tab === (scoring ? 'scoring' : 'history');
+      $('tab-' + tab).setAttribute('aria-selected', String(selected));
+      $('tab-' + tab).tabIndex = selected ? 0 : -1;
+      $('panel-' + tab).hidden = !selected;
+    }
+    if (scoring) renderScoringLab();
+    else renderHistory();
+  }
 }
 
 window.addEventListener('hashchange', route);
