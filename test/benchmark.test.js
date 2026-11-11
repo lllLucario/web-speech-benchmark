@@ -61,3 +61,20 @@ test('dataset includes 30 unique prompts across ten categories', () => {
   assert.equal(new Set(entries.map(entry => entry.category)).size, 10);
   assert.throws(() => parseDataset([entries[0], entries[0]]), /Duplicate/u);
 });
+
+test('aggregation counts failed runs, excludes missing timings and keeps methods separate', async () => {
+  const { aggregate, groupMetrics } = await import('../site/benchmark.js');
+  const runs = [
+    { method: 'live', success: true, evaluation: score('two coffees', 'two coffees', ['two']), latency: { firstResult: 120 } },
+    { method: 'external', success: false, evaluation: score('two coffees', '', ['two']), latency: { firstResult: null } }
+  ];
+  const total = aggregate(runs);
+  assert.equal(total.successRate, 0.5);
+  assert.equal(total.wer.average, 0.5);
+  assert.deepEqual(total.critical, { matched: 1, total: 2, rate: 0.5 });
+  assert.equal(total.latency.firstResult.average, 120);
+  assert.equal(total.latency.firstResult.missing, 1);
+  const [live, external] = groupMetrics(runs, run => run.method);
+  assert.equal(live.latency.firstResult.p95, 120);
+  assert.equal(external.latency.firstResult.p95, null);
+});

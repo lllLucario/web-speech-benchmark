@@ -15,6 +15,8 @@
       <a class="brand" href="#bench"><span class="signal" aria-hidden="true">▂▅▃▇</span> Order Signal</a>
       <nav aria-label="Workspace">
         <a href="#bench" data-view="bench">Benchmark</a>
+        <a href="#dataset" data-view="dataset">Dataset</a>
+        <a href="#results" data-view="results">Results</a>
       </nav>
     </div>
   </header>
@@ -77,7 +79,7 @@
         </aside>
       </div>
       <section class="ruled" aria-labelledby="measurement-title">
-        <div class="section-heading"><h2 id="measurement-title">Event timing</h2><p>Browser event intervals in milliseconds. Speech boundaries are approximate.</p></div>
+        <div class="section-heading"><h2 id="measurement-title">Event timing</h2><p>Intervals between browser events in milliseconds. Speech boundaries are approximate. ASR inference time is unavailable.</p></div>
         <div id="latencies" class="metrics"></div>
         <details><summary>Recognition event log <span id="event-count"></span></summary><ol id="events" class="events"></ol></details>
       </section>
@@ -101,7 +103,7 @@
       <div class="intro"><h1 id="dataset-title">Order dataset</h1><p>Choose, edit or add reference orders for your benchmark.</p></div>
       <div class="actions toolbar">
         <button id="custom-case" class="primary" type="button">Add case</button>
-        <label class="file-button">Import JSON<input id="import-dataset" type="file" accept="application/json,.json"></label>
+        <label class="file-button">Replace from JSON<input id="import-dataset" type="file" accept="application/json,.json"></label>
         <button id="export-dataset" type="button">Export JSON</button>
       </div>
       <div class="dataset-grid">
@@ -126,6 +128,7 @@
         <button id="session-json" type="button">Sessions JSON</button><button id="session-csv" type="button">Sessions CSV</button>
         <button id="aggregate-json" type="button">Metrics JSON</button><button id="aggregate-csv" type="button">Metrics CSV</button>
       </div>
+      <label class="check"><input type="checkbox" id="compare-sessions" checked> Compare saved sessions</label>
       <div id="history"></div>
     </section>
     <p id="notice" class="notice" role="status" hidden></p>
