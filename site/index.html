@@ -64,9 +64,9 @@
           <div class="actions"><button id="mixed-case" type="button">Try 中文 + English</button><button id="repeat" type="button">Repeat case</button><button id="next" type="button">Next case →</button></div>
           <details>
             <summary>Scoring settings</summary>
-            <label>Evaluation mode<select id="mode"><option value="strict">Strict</option><option value="normalized">Normalized</option></select></label>
-            <label id="fillers-label" hidden>Ignore these fillers <input id="fillers" value="uh, um, er" autocomplete="off"></label>
-            <p class="muted">Strict ignores case and punctuation. Normalized also maps number words zero–twenty and removes the listed filler tokens.</p>
+            <label>Evaluation mode<select id="mode"><option value="normalized" selected>Normalized</option><option value="strict">Strict</option></select></label>
+            <label id="fillers-label">Ignore these fillers <input id="fillers" value="uh, um, er" autocomplete="off"></label>
+            <p class="muted">Both modes ignore case and punctuation. Normalized also treats number words zero–twenty as digits and skips the listed filler tokens.</p>
           </details>
           <details id="session-settings">
             <summary>Batch setup</summary>
