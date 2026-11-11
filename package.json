@@ -1,0 +1,13 @@
+{
+  "name": "web-speech-benchmark",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=20"},
+  "scripts": {
+    "dev": "node scripts/serve.mjs site",
+    "check": "node --check site/app.js && node --check site/recognition.js && node --check site/benchmark.js && node --check site/dataset.js",
+    "test": "node --test",
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/serve.mjs dist"
+  }
+}

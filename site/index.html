@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f3e9">
+  <meta name="description" content="Measure browser speech recognition on English restaurant orders.">
+  <title>Order Signal · Speech benchmark</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="bar frame">
+      <a class="brand" href="#bench"><span class="signal" aria-hidden="true">▂▅▃▇</span> Order Signal</a>
+      <nav aria-label="Workspace">
+        <a href="#bench" data-view="bench">Benchmark</a>
+      </nav>
+    </div>
+  </header>
+  <main class="frame">
+    <section id="bench" aria-labelledby="bench-title">
+      <div class="intro">
+        <h1 id="bench-title">Speech benchmark</h1>
+        <p>Measure how your browser hears a restaurant order.</p>
+      </div>
+      <div class="bench-grid">
+        <div class="capture">
+          <div class="capture-head">
+            <h2>Recognition</h2>
+            <span id="status" data-state="idle" role="status">Idle</span>
+          </div>
+          <div class="settings">
+            <label>Language<select id="language"><option value="en-AU">English · AU</option><option value="en-US">English · US</option><option value="en-GB">English · GB</option></select></label>
+            <label>Input method<select id="method"><option value="live">Live speech</option><option value="external">External audio playback</option><option value="track">AudioTrack</option></select></label>
+            <label class="check"><input type="checkbox" id="interim-enabled" checked> Interim results</label>
+          </div>
+          <div id="audio-area" hidden>
+            <p id="method-help" class="muted"></p>
+            <label id="file-label">Audio file<input type="file" id="audio-file" accept="audio/*,.wav,.mp3"></label>
+            <audio id="preview" controls preload="metadata" hidden></audio>
+            <a id="case-audio" rel="noopener noreferrer" target="_blank" hidden>Open this case’s audio reference</a>
+          </div>
+          <div class="controls">
+            <button id="start" type="button" class="primary mic"><span class="mic-icon" aria-hidden="true"></span><span id="start-label">Start recognition</span></button>
+            <button id="stop" type="button" disabled>Stop</button>
+            <button id="reset" type="button" disabled>Reset</button>
+          </div>
+          <p id="error" class="error" role="alert" hidden></p>
+          <div class="transcripts">
+            <div><h3>Interim</h3><p id="interim-text" class="transcript"></p></div>
+            <div><h3>Final</h3><p id="final-text" class="transcript"></p></div>
+          </div>
+          <details class="full"><summary>Full session transcript</summary><p id="full-text" class="transcript"></p></details>
+        </div>
+        <aside class="ticket" aria-labelledby="case-title">
+          <div class="ticket-head"><h2 id="case-title">Test case</h2><span id="case-progress" class="badge"></span></div>
+          <label>Order prompt<select id="case-select"></select></label>
+          <blockquote id="reference"></blockquote>
+          <p id="case-notes" class="muted" hidden></p>
+          <div class="actions"><button id="repeat" type="button">Repeat case</button><button id="next" type="button">Next case →</button></div>
+          <details>
+            <summary>Scoring settings</summary>
+            <label>Evaluation mode<select id="mode"><option value="strict">Strict</option><option value="normalized">Normalized</option></select></label>
+            <label id="fillers-label" hidden>Ignore these fillers <input id="fillers" value="uh, um, er" autocomplete="off"></label>
+            <p class="muted">Strict ignores case and punctuation. Normalized also maps number words zero–twenty and removes the listed filler tokens.</p>
+          </details>
+          <details id="session-settings">
+            <summary>Batch setup</summary>
+            <label>Network<input id="network" placeholder="e.g. Wi-Fi or 5G" maxlength="100"></label>
+            <label>Environment<select id="environment"><option>Quiet</option><option>Restaurant noise</option><option>Other</option></select></label>
+            <label>Selected cases<select id="queue" multiple size="5"></select></label>
+            <p class="muted">Select one or more cases for a guided sequence. With no selection, the sequence includes all cases.</p>
+            <button id="new-session" type="button">Start new session</button>
+          </details>
+          <p id="session-label" class="session-label"></p>
+        </aside>
+      </div>
+      <section class="ruled" aria-labelledby="measurement-title">
+        <div class="section-heading"><h2 id="measurement-title">Event timing</h2><p>Browser event intervals in milliseconds. Speech boundaries are approximate.</p></div>
+        <div id="latencies" class="metrics"></div>
+        <details><summary>Recognition event log <span id="event-count"></span></summary><ol id="events" class="events"></ol></details>
+      </section>
+      <section class="ruled" aria-labelledby="accuracy-title">
+        <div class="section-heading"><h2 id="accuracy-title">Accuracy</h2><p>Word accuracy = 1 − WER. Critical terms use lexical phrase matching.</p></div>
+        <div id="accuracy"></div>
+        <div class="actions save-row">
+          <button id="save" class="primary" type="button" disabled>Save run</button>
+          <button id="run-json" type="button" disabled>Run JSON</button><button id="run-csv" type="button" disabled>Run CSV</button>
+          <button id="event-json" type="button" disabled>Events JSON</button><button id="event-csv" type="button" disabled>Events CSV</button>
+        </div>
+      </section>
+      <details class="support ruled">
+        <summary>Browser &amp; device support</summary>
+        <dl id="support-info"></dl>
+        <p>API detection checks whether the constructor exists. A completed test on this browser and device is needed to verify recognition and event availability. A browser may send audio to its own speech service.</p>
+        <p>AudioTrack is an experimental test path enabled on eligible desktop Chrome versions. Check for actual file transcription in a quiet room. In external playback mode, play the clip on a separate device.</p>
+      </details>
+    </section>
+    <section id="dataset" hidden aria-labelledby="dataset-title">
+      <div class="intro"><h1 id="dataset-title">Order dataset</h1><p>Choose, edit or add reference orders for your benchmark.</p></div>
+      <div class="actions toolbar">
+        <button id="custom-case" class="primary" type="button">Add case</button>
+        <label class="file-button">Import JSON<input id="import-dataset" type="file" accept="application/json,.json"></label>
+        <button id="export-dataset" type="button">Export JSON</button>
+      </div>
+      <div class="dataset-grid">
+        <div id="case-list" class="case-list" aria-label="Dataset cases"></div>
+        <form id="edit-form" class="ticket editor">
+          <h2 id="editor-title">Edit case</h2>
+          <label>Case ID<input id="edit-id" required maxlength="100"></label>
+          <label>Category<input id="edit-category" required maxlength="100"></label>
+          <label>Reference transcript<textarea id="edit-reference" rows="4" required></textarea></label>
+          <label>Critical phrases <small>One per line</small><textarea id="edit-terms" rows="3"></textarea></label>
+          <label>Optional audio reference<input id="edit-audio" placeholder="https://… or filename"></label>
+          <label>Notes<textarea id="edit-notes" rows="2"></textarea></label>
+          <label class="check"><input type="checkbox" id="edit-completed"> Mark completed</label>
+          <div class="actions"><button id="save-case" class="primary" type="submit">Save case</button><button id="use-case" type="button">Use in benchmark</button></div>
+        </form>
+      </div>
+    </section>
+    <section id="results" hidden aria-labelledby="results-title">
+      <div class="intro"><h1 id="results-title">Benchmark results</h1><p>Review saved attempts and compare sessions on this browser.</p></div>
+      <div class="actions toolbar">
+        <label>Session<select id="history-select"></select></label>
+        <button id="session-json" type="button">Sessions JSON</button><button id="session-csv" type="button">Sessions CSV</button>
+        <button id="aggregate-json" type="button">Metrics JSON</button><button id="aggregate-csv" type="button">Metrics CSV</button>
+      </div>
+      <div id="history"></div>
+    </section>
+    <p id="notice" class="notice" role="status" hidden></p>
+  </main>
+  <footer class="frame footer"><span>Order Signal</span><span>Datasets and saved runs stay in this browser.</span></footer>
+</body>
+</html>

@@ -1,0 +1,29 @@
+# Order Signal
+
+A static Web Speech API benchmark for English restaurant orders. No runtime dependencies or application backend.
+
+## Run locally
+
+With Node 20 or newer, run `npm run dev` and open the printed localhost URL. Run `npm run check`, `npm test`, and `npm run build` for validation. The production artifact is `dist/`. `npm run preview` serves that artifact. Assets are relative to the page, including under `/web-speech-benchmark/`.
+
+## Test on a phone
+
+1. Open the deployed HTTPS URL in iOS Safari or Android Chrome. Record the browser and device details shown in the support section.
+2. Select a prompt, language, and input method. Tap **Start recognition**, grant the browser's permission, and wait for **Listening**.
+3. Read the order aloud or play a corresponding recording from another device using **External audio playback**.
+4. Tap **Stop** or let the browser finish. Review raw interim and final text, event timings, WER, and the word alignment.
+5. Save the run and export JSON or CSV. Repeat with permission denied, silence, and multiple consecutive runs to check failure handling.
+
+Constructor detection indicates API presence. Recognition may depend on browser permissions, device configuration, connectivity and the browser's own speech service. AudioTrack is restricted to eligible desktop Chrome configurations. A file is decoded in Web Audio and routed through a media destination to `start(track)`. Verify the result against a known recording in a quiet room. Failures never retry through the microphone.
+
+## Measurements
+
+Event offsets use `performance.now()` from the start of the attempt. Measurements are differences between observed browser events, and speech boundaries are approximate. Missing events and reversed intervals produce N/A. The end-of-speech metrics use the last speech-end event and, for final-result latency, the first new final result after it.
+
+WER counts word substitutions, deletions and insertions using Levenshtein alignment, divided by reference word count. Word accuracy is 1 − WER and can be negative. Strict comparison ignores case and punctuation. Normalized comparison also maps number words zero–twenty and strips selected filler tokens. Critical phrases use contiguous lexical matches and retain filler tokens. Raw browser segments are available in JSON.
+
+Runs are successful when a non-blank final transcript arrives with no recorded recognition error. Browser-local storage holds saved records. Export them before clearing site data. WAV and MP3 availability depends on the browser's decoder.
+
+## Architecture and deployment
+
+`site/app.js` binds the interface. `site/recognition.js` manages the recognition and audio lifecycle. `site/benchmark.js` handles scoring, statistics and export. `site/dataset.js` defines and validates prompts. GitHub Actions runs checks and tests, builds the static artifact, and deploys through GitHub Pages.
