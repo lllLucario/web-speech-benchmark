@@ -62,11 +62,10 @@ button:disabled { cursor: default; opacity: .55; }
 .mic-icon { width: .68rem; height: 1rem; border: 2px solid currentColor; border-radius: 1rem; position: relative; }
 .mic-icon::before { content: ''; position: absolute; inset: .35rem -.29rem -.28rem; border: 1px solid currentColor; border-top: 0; border-radius: 0 0 1rem 1rem; }
 .mic-icon::after { content: ''; position: absolute; height: .3rem; width: 1px; background: currentColor; inset: auto 50% -.53rem; }
-.transcripts { display: grid; gap: 0 1rem; }
-.transcripts > div, .full { border-top: 1px solid var(--line); padding-top: .65rem; }
-.transcript, .raw { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1.45rem; }
-.transcript:empty::before { content: '—'; color: var(--quiet); }
-.full { margin-top: .1rem; }
+.transcript-field textarea { font-size: 1rem; font-weight: 400; }
+.transcript-field textarea:read-only { background: var(--paper); }
+#transcript-help { font-size: .82rem; margin: .35rem 0 0; }
+.raw { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1.45rem; }
 blockquote { font-size: clamp(1.35rem, 2.5vw, 1.95rem); line-height: 1.2; margin: 1.15rem 0; overflow-wrap: anywhere; }
 .ticket details { margin-top: .8rem; border-top: 1px dashed #9e9e87; padding-top: .55rem; }
 .ticket label + label, .ticket details label, .ticket details p, .ticket details button { margin-top: .65rem; }
@@ -116,6 +115,5 @@ td:not(:first-child), thead th:not(:first-child) { white-space: nowrap; }
   .bench-grid { grid-template-columns: minmax(0, 1.65fr) minmax(16rem, 1fr); }
   .dataset-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); }
   .case-list { max-height: 38rem; }
-  .transcripts, .comparison { grid-template-columns: 1fr 1fr; }
+  .comparison { grid-template-columns: 1fr 1fr; }
 }
-@media (min-width: 60rem) { .settings { grid-template-columns: 1fr 1.4fr auto; align-items: end; } }

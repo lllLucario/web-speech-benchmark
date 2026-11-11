@@ -15,7 +15,7 @@ With Node 20 or newer, run `npm run dev` and open the printed localhost URL. Run
 1. Open the deployed HTTPS URL in iOS Safari or Android Chrome. Record the browser and device details shown in the support section.
 2. Select a prompt, language, and input method. Tap **Start recognition**, grant the browser's permission, and wait for **Listening**.
 3. Read the order aloud or play a corresponding recording from another device using **External audio playback**.
-4. Tap **Stop** or let the browser finish. Review raw interim and final text, event timings, WER, and the word alignment.
+4. Tap **End recognition** on the same button or let the browser finish. Edit the text in **Transcript** after recognition ends. Review timing, error rates, and alignment under the benchmark results.
 5. Save the run and export JSON or CSV. Repeat with permission denied, silence, and multiple consecutive runs to check failure handling.
 
 Constructor detection indicates API presence. Recognition may depend on browser permissions, device configuration, connectivity and the browser's own speech service. AudioTrack is restricted to eligible desktop Chrome configurations. A file is decoded in Web Audio and routed through a media destination to `start(track)`. Verify the result against a known recording in a quiet room. Failures never retry through the microphone.
@@ -34,7 +34,7 @@ Event offsets use `performance.now()` from the start of the attempt. Measurement
 
 For references containing Han characters, the benchmark uses mixed error rate (MER). Each Han character and English word counts as one token. MER uses the same edit-distance formula over those tokens and is reported separately from WER. The scorer keeps simplified and traditional forms distinct and never translates a transcript. [MER definition](https://dihana.cps.unizar.es/proceedings/ICASSP/2012/pdfs/0004889.pdf)
 
-WER counts word substitutions, deletions and insertions using Levenshtein alignment, divided by reference word count. Word accuracy is 1 − WER and can be negative. Strict comparison ignores case and punctuation. Normalized comparison also maps number words zero–twenty and strips selected filler tokens. Critical phrases use contiguous lexical matches and retain filler tokens. Raw browser segments are available in JSON.
+WER counts word substitutions, deletions and insertions using Levenshtein alignment, divided by reference word count. Word accuracy is 1 − WER and can be negative. Strict comparison ignores case and punctuation. Normalized comparison also maps number words zero–twenty and strips selected filler tokens. Critical phrases use contiguous lexical matches and retain filler tokens. Raw browser segments are available in JSON. User corrections are saved and exported as a separate edited transcript. Benchmark scores use the original browser output.
 
 A successful run has a non-blank final transcript, no recorded errors and a browser, manual or audio-ended termination. WER includes failed runs with scorable references, including deletion-only results when the browser returns no final transcript. Average WER and MER are means across runs scored with their respective metric. P50 and P95 use linear interpolation at rank `(n − 1) × p` across finite values. Latency tables show valid and missing counts per input method. Browser-local storage holds saved records. Export them before clearing site data. WAV and MP3 availability depends on the browser's decoder.
 

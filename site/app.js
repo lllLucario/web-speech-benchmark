@@ -113,7 +113,7 @@ function accuracyView(run) {
     metric('Substitutions / Deletions / Insertions', [evaluation.substitution, evaluation.deletion, evaluation.insertion].join(' / ')),
     metric('Critical terms', evaluation.critical.length ? matched + ' / ' + evaluation.critical.length : 'N/A'));
   const comparison = el('div', '', 'comparison');
-  for (const [title, value] of [['Reference', run.reference], ['Recognized · final', run.transcripts.final || '—']]) {
+  for (const [title, value] of [['Reference', run.reference], ['Original transcript', run.transcripts.final || '—']]) {
     const column = el('div');
     column.append(el('h3', title), el('p', value, 'raw'));
     comparison.append(column);
@@ -186,10 +186,17 @@ function renderMethod() {
   $('file-label').hidden = method !== 'track';
   $('preview').hidden = method !== 'track' || !file;
   $('method-help').textContent = method === 'external'
-    ? 'Start recognition on this device, then play the case recording from a separate device. Stop and save the result.'
+    ? 'Start recognition on this device, then play the case recording from a separate device. Tap the same button to end recognition, then save the run.'
     : trackAvailable ? 'Choose and preview a file. Recognition routes it through an audio track. This path requires a successful file test.'
       : 'AudioTrack is unavailable here. Choose External audio playback to test a recording from a separate device.';
-  $('start-label').textContent = method === 'track' ? 'Test audio file' : 'Start recognition';
+}
+
+function renderSave() {
+  const run = current?.run;
+  const saved = session?.runs.find(item => item.id === run?.id);
+  const hasEdits = saved && saved.editedTranscript !== run.editedTranscript;
+  $('save').disabled = current?.state !== 'finished' || Boolean(saved && !hasEdits);
+  $('save').textContent = hasEdits ? 'Save edits' : saved ? 'Run saved' : 'Save run';
 }
 
 function renderRun() {
@@ -209,16 +216,17 @@ function renderRun() {
     !Recognition ? 'This browser does not expose the speech recognition API.' : '');
   if ($('error').textContent !== error) $('error').textContent = error;
   $('error').hidden = !error;
-  $('start').disabled = busy || !canStart;
-  $('stop').disabled = !['starting', 'listening'].includes(state);
+  const labels = { preparing: 'Cancel audio setup', starting: 'End recognition', listening: 'End recognition', stopping: 'Finishing…' };
+  $('start-label').textContent = labels[state] ?? (method === 'track' ? 'Test audio file' : 'Start recognition');
+  $('start').disabled = busy ? state === 'stopping' : !canStart;
   $('reset').disabled = !current;
-  for (const id of ['language', 'method', 'interim-enabled', 'case-select', 'mode', 'fillers', 'audio-file', 'next', 'repeat', 'mixed-case', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
-  $('save').disabled = !ready || Boolean(run?.saved);
-  $('save').textContent = run?.saved ? 'Run saved' : 'Save run';
+  for (const id of ['language', 'method', 'case-select', 'mode', 'fillers', 'audio-file', 'next', 'repeat', 'mixed-case', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
+  renderSave();
   for (const id of ['run-json', 'run-csv', 'event-json', 'event-csv']) $(id).disabled = !ready;
-  for (const [key, name] of [['interim', 'interim-text'], ['final', 'final-text'], ['full', 'full-text']]) {
-    $(name).textContent = run?.transcripts[key] ?? '';
-  }
+  const transcript = $('transcript');
+  transcript.readOnly = !ready;
+  const value = ready ? (run.editedTranscript ?? run.transcripts.final) : (run?.transcripts?.full ?? '');
+  if (transcript.value !== value) transcript.value = value;
   $('latencies').replaceChildren(...Object.entries(latencyLabels).map(([key, label]) => metric(label, ms(run?.latency[key]))));
   const events = run?.events ?? [];
   $('event-count').textContent = '(' + events.length + ')';
@@ -285,7 +293,7 @@ function startRun() {
     id: uuid(), sessionId: parent.id, startedAt: new Date().toISOString(),
     caseId, category: item.category, reference: item.reference, criticalTerms: [...item.criticalTerms],
     notes: item.notes, audioReference: item.audio, fileName: parent.method === 'track' ? file.name : null,
-    browser, device, ...configuration(), interim: $('interim-enabled').checked,
+    browser, device, ...configuration(), interim: true,
     scoring: { mode: $('mode').value, fillers: $('fillers').value.split(',').map(value => value.trim()).filter(Boolean) },
     events: [], errors: [], manualStop: false, termination: null
   };
@@ -303,19 +311,35 @@ function startRun() {
 
 function saveRun() {
   const run = current?.run;
-  if ($('save').disabled || !run || run.saved) return;
+  if ($('save').disabled || !run) return;
+  const index = session.runs.findIndex(item => item.id === run.id);
   run.saved = true;
-  session.runs.push(run);
-  if (!sessions.includes(session)) sessions.push(session);
-  const item = cases.find(candidate => candidate.id === run.caseId);
-  if (run.success && item) item.completed = true;
-  if (persist()) notice('Run saved on this device.');
-  fillCaseOptions(batchSelection());
+  const snapshot = { ...run };
+  if (index < 0) {
+    session.runs.push(snapshot);
+    if (!sessions.includes(session)) sessions.push(session);
+    const item = cases.find(candidate => candidate.id === run.caseId);
+    if (run.success && item) item.completed = true;
+    fillCaseOptions(batchSelection());
+  } else {
+    session.runs[index] = snapshot;
+  }
+  if (persist()) notice(index < 0 ? 'Run saved on this device.' : 'Transcript edits saved.');
   renderRun();
 }
 
-bind('start', startRun);
-bind('stop', () => current?.requestStop());
+bind('start', () => {
+  if (current?.state === 'preparing') current.abort('cancelled');
+  else if (active()) current.requestStop();
+  else startRun();
+});
+bind('transcript', () => {
+  if (current?.state !== 'finished') return;
+  const { run } = current;
+  const value = $('transcript').value;
+  run.editedTranscript = value === run.transcripts.final ? undefined : value;
+  renderSave();
+}, 'input');
 bind('reset', () => {
   if (active()) {
     const discarded = current;
@@ -540,6 +564,9 @@ function historicalRun(run) {
       ['Termination', run.termination],
       ['Errors', run.errors.map(error => error.code + ' · ' + error.message).join(' / ') || 'None']
     ]), accuracyView(run));
+  if (run.editedTranscript !== undefined) {
+    entry.append(el('h3', 'Edited transcript'), el('p', run.editedTranscript, 'raw'));
+  }
   const latency = el('div', '', 'metrics');
   latency.append(...Object.entries(latencyLabels).map(([key, label]) => metric(label, ms(run.latency[key]))));
   entry.append(latency);

@@ -35,7 +35,6 @@
           <div class="settings">
             <label>Language<select id="language"><option value="en-AU">English · AU</option><option value="en-US">English · US</option><option value="en-GB">English · GB</option><option value="zh-CN">普通话 · zh-CN</option></select></label>
             <label>Input method<select id="method"><option value="live">Live speech</option><option value="external">External audio playback</option><option value="track">AudioTrack</option></select></label>
-            <label class="check"><input type="checkbox" id="interim-enabled" checked> Interim results</label>
           </div>
           <div id="audio-area" hidden>
             <p id="method-help" class="muted"></p>
@@ -45,15 +44,16 @@
           </div>
           <div class="controls">
             <button id="start" type="button" class="primary mic"><span class="mic-icon" aria-hidden="true"></span><span id="start-label">Start recognition</span></button>
-            <button id="stop" type="button" disabled>Stop</button>
             <button id="reset" type="button" disabled>Reset</button>
           </div>
           <p id="error" class="error" role="alert" hidden></p>
-          <div class="transcripts">
-            <div><h3>Interim</h3><p id="interim-text" class="transcript"></p></div>
-            <div><h3>Final</h3><p id="final-text" class="transcript"></p></div>
+          <label class="transcript-field">Transcript
+            <textarea id="transcript" rows="4" readonly aria-describedby="transcript-help"></textarea>
+          </label>
+          <p id="transcript-help" class="muted">Text appears as you speak. Edit it here after recognition ends.</p>
+          <div class="actions save-row">
+            <button id="save" class="primary" type="button" disabled>Save run</button>
           </div>
-          <details class="full"><summary>Full session transcript</summary><p id="full-text" class="transcript"></p></details>
         </div>
         <aside class="ticket" aria-labelledby="case-title">
           <div class="ticket-head"><h2 id="case-title">Test case</h2><span id="case-progress" class="badge"></span></div>
@@ -85,10 +85,9 @@
         <details><summary>Recognition event log <span id="event-count"></span></summary><ol id="events" class="events"></ol></details>
       </section>
       <section class="ruled" aria-labelledby="accuracy-title">
-        <div class="section-heading"><h2 id="accuracy-title">Accuracy</h2><p>WER counts English words. MER counts each Han character and each English word as one token. Accuracy = 1 − error rate. Critical terms use lexical phrase matching.</p></div>
+        <div class="section-heading"><h2 id="accuracy-title">Accuracy</h2><p>Scores use the original browser transcript. WER counts English words. MER counts each Han character and each English word as one token. Accuracy = 1 − error rate. Critical terms use lexical phrase matching.</p></div>
         <div id="accuracy"></div>
         <div class="actions save-row">
-          <button id="save" class="primary" type="button" disabled>Save run</button>
           <button id="run-json" type="button" disabled>Run JSON</button><button id="run-csv" type="button" disabled>Run CSV</button>
           <button id="event-json" type="button" disabled>Events JSON</button><button id="event-csv" type="button" disabled>Events CSV</button>
         </div>
