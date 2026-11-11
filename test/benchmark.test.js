@@ -55,10 +55,11 @@ test('exports preserve JSON and escape CSV punctuation and spreadsheet formulas'
   assert.equal(csv(records), "\"raw\",\"ms\"\r\n\"x, \"\"y\"\"\n!\",\"\"\r\n\"'=3+5\",\"0\"\r\n");
 });
 
-test('dataset includes 30 unique prompts across ten categories', () => {
+test('dataset includes 30 English prompts and six mixed prompts', () => {
   const entries = parseDataset({ cases: builtInCases });
-  assert.equal(entries.length, 30);
-  assert.equal(new Set(entries.map(entry => entry.category)).size, 10);
+  assert.equal(entries.length, 36);
+  assert.equal(new Set(entries.map(entry => entry.category)).size, 11);
+  assert.equal(entries.filter(entry => entry.id.startsWith('MIX-')).length, 6);
   assert.throws(() => parseDataset([entries[0], entries[0]]), /Duplicate/u);
 });
 
@@ -77,4 +78,26 @@ test('aggregation counts failed runs, excludes missing timings and keeps methods
   const [live, external] = groupMetrics(runs, run => run.method);
   assert.equal(live.latency.firstResult.p95, 120);
   assert.equal(external.latency.firstResult.p95, null);
+});
+
+test('mixed scoring handles adjacent Han characters and English words with lexical matching', () => {
+  const result = score('我要两杯iced latte，不要糖。', '我要两杯 ICED LATTE，不要盐。', ['两杯 iced latte', '不要糖']);
+  assert.equal(result.metric, 'MER');
+  assert.equal(result.referenceTokens, 9);
+  assert.equal(result.wer, null);
+  assert.equal(result.mer, 1 / 9);
+  assert.deepEqual(result.critical.map(item => item.matched), [true, false]);
+  assert.equal(score('不要糖', '不要糖').mer, 0);
+  assert.equal(score('iced latte', 'iced latte').metric, 'WER');
+});
+
+test('mixed and English error rates aggregate independently, including older saved WER runs', async () => {
+  const { aggregate } = await import('../site/benchmark.js');
+  const old = { wer: 0.25, critical: [] };
+  const mixed = score('两杯 latte', '两杯 latte');
+  const totals = aggregate([old, mixed].map(evaluation => ({ success: true, evaluation, latency: {} })));
+  assert.equal(totals.wer.average, 0.25);
+  assert.equal(totals.wer.count, 1);
+  assert.equal(totals.mer.average, 0);
+  assert.equal(totals.mer.count, 1);
 });

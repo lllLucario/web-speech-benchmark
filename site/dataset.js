@@ -52,12 +52,26 @@ const groups = {
 };
 
 let number = 0;
-export const builtInCases = Object.entries(groups).flatMap(([category, rows]) =>
+export const englishCases = Object.entries(groups).flatMap(([category, rows]) =>
   rows.map(([reference, terms]) => ({
     id: 'ORD-' + String(++number).padStart(2, '0'),
     category, reference, audio: '', notes: '', criticalTerms: terms.split('|'), completed: false
   }))
 );
+
+export const mixedCases = [
+  ['我要两杯 iced latte，一杯换成 oat milk。', ['两杯', 'iced latte', '一杯', 'oat milk']],
+  ['来一个 cheeseburger，不要 onion，再加一份 small fries。', ['cheeseburger', '不要', 'onion', 'small fries']],
+  ['我要一份 chicken burger，sorry，改成 fish burger。', ['chicken burger', '改成', 'fish burger']],
+  ['Can I get 一份 fettuccine Alfredo，再来一杯 sparkling water？', ['一份', 'fettuccine Alfredo', '一杯', 'sparkling water']],
+  ['两杯 flat white，一杯 extra hot，另一杯不要糖。', ['两杯', 'flat white', 'extra hot', '不要糖']],
+  ['我要一份 shakshuka，辣酱 on the side，打包带走。', ['shakshuka', '辣酱', 'on the side', '打包']]
+].map(([reference, criticalTerms], index) => ({
+  id: 'MIX-0' + (index + 1), category: 'Mandarin + English',
+  reference, criticalTerms, audio: '', notes: '', completed: false
+}));
+
+export const builtInCases = [...englishCases, ...mixedCases];
 
 export function parseDataset(input) {
   const cases = Array.isArray(input) ? input : input?.cases;

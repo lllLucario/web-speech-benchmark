@@ -5,10 +5,12 @@ function words(text) {
   return text.toLowerCase().replace(/['’‘]/gu, '').match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
-export function tokenize(text, { mode = 'strict', fillers = [] } = {}) {
-  const tokens = words(text);
+const han = /\p{Script=Han}/u;
+
+export function tokenize(text, { mode = 'strict', fillers = [], mixed = false } = {}) {
+  const tokens = words(mixed ? text.replace(/\p{Script=Han}/gu, ' $& ') : text);
   if (mode !== 'normalized') return tokens;
-  const ignored = new Set(fillers.flatMap(words));
+  const ignored = new Set(fillers.flatMap(words).filter(word => !mixed || !han.test(word)));
   return tokens.filter(word => !ignored.has(word)).map(word => {
     if (/^\d+$/u.test(word)) return word.replace(/^0+(?=\d)/u, '');
     return numericWords.get(word) ?? word;
@@ -52,15 +54,17 @@ export function align(reference, hypothesis) {
 }
 
 export function score(reference, transcript, terms = [], options = {}) {
-  const ref = tokenize(reference, options);
-  const hyp = tokenize(transcript, options);
+  const mixed = han.test(reference);
+  const scoring = { ...options, mixed };
+  const ref = tokenize(reference, scoring);
+  const hyp = tokenize(transcript, scoring);
   const edits = align(ref, hyp);
   const counts = { substitution: 0, deletion: 0, insertion: 0 };
   for (const { kind } of edits) {
     if (kind !== 'equal') counts[kind]++;
   }
-  const wer = ref.length ? (counts.substitution + counts.deletion + counts.insertion) / ref.length : null;
-  const termOptions = { ...options, fillers: [] };
+  const errorRate = ref.length ? (counts.substitution + counts.deletion + counts.insertion) / ref.length : null;
+  const termOptions = { ...scoring, fillers: [] };
   const lexicalTokens = tokenize(transcript, termOptions);
   const critical = [...new Set(terms.map(term => term.trim()).filter(Boolean))].flatMap(term => {
     const phrase = tokenize(term, termOptions);
@@ -68,7 +72,11 @@ export function score(reference, transcript, terms = [], options = {}) {
     return [{ term, matched: lexicalTokens.some((_, i) =>
       phrase.every((word, offset) => word === lexicalTokens[i + offset])) }];
   });
-  return { wer, accuracy: wer === null ? null : 1 - wer, referenceWords: ref.length, ...counts, edits, critical };
+  return {
+    metric: mixed ? 'MER' : 'WER', wer: mixed ? null : errorRate, mer: mixed ? errorRate : null,
+    accuracy: errorRate === null ? null : 1 - errorRate,
+    referenceWords: mixed ? null : ref.length, referenceTokens: ref.length, ...counts, edits, critical
+  };
 }
 
 // Process only revised result indexes. Previously final slots are immutable.
@@ -148,7 +156,8 @@ export function aggregate(runs) {
   return {
     total: runs.length, successful, failed: runs.length - successful,
     successRate: runs.length ? successful / runs.length : null,
-    wer: stats(runs.map(run => run.evaluation.wer)),
+    wer: stats(runs.filter(run => run.evaluation.metric !== 'MER').map(run => run.evaluation.wer)),
+    mer: stats(runs.filter(run => run.evaluation.metric === 'MER').map(run => run.evaluation.mer)),
     critical: { matched, total: terms.length, rate: terms.length ? matched / terms.length : null },
     latency: Object.fromEntries(Object.keys(latencyLabels).map(key => [key, stats(runs.map(run => run.latency[key]))]))
   };

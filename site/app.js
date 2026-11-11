@@ -1,4 +1,4 @@
-import { builtInCases, parseDataset } from './dataset.js';
+import { builtInCases, mixedCases, parseDataset } from './dataset.js';
 import { aggregate, csv, groupMetrics, json, latencyLabels, score } from './benchmark.js';
 import { audioTrackCandidate, inputLabels, RecognitionRun } from './recognition.js';
 
@@ -28,7 +28,7 @@ function readStorage() {
   catch { storageError = true; return {}; }
 }
 const stored = readStorage();
-let cases = stored.cases ?? builtInCases;
+let cases = stored.cases ?? structuredClone(builtInCases);
 const sessions = stored.sessions ?? [];
 let session = sessions.at(-1) ?? null;
 let caseId = cases[0].id;
@@ -98,13 +98,18 @@ function detailsList(entries) {
   return list;
 }
 
+const errorMetric = evaluation => evaluation.metric === 'MER' ? 'MER' : 'WER';
+const errorValue = evaluation => errorMetric(evaluation) === 'MER' ? evaluation.mer : evaluation.wer;
+
 function accuracyView(run) {
   if (!run) return el('p', 'Finish a recognition attempt to compare it with the reference.', 'muted');
   const root = el('div');
   const evaluation = run.evaluation ?? score(run.reference, run.transcripts.final, run.criticalTerms, run.scoring);
   const summary = el('div', '', 'metrics');
   const matched = evaluation.critical.filter(item => item.matched).length;
-  summary.append(metric('WER', pct(evaluation.wer)), metric('Word accuracy', pct(evaluation.accuracy)),
+  const mixed = errorMetric(evaluation) === 'MER';
+  summary.append(metric(errorMetric(evaluation), pct(errorValue(evaluation))),
+    metric(mixed ? 'Token accuracy' : 'Word accuracy', pct(evaluation.accuracy)),
     metric('Substitutions / Deletions / Insertions', [evaluation.substitution, evaluation.deletion, evaluation.insertion].join(' / ')),
     metric('Critical terms', evaluation.critical.length ? matched + ' / ' + evaluation.critical.length : 'N/A'));
   const comparison = el('div', '', 'comparison');
@@ -120,7 +125,7 @@ function accuracyView(run) {
     token.title = kind;
     diff.append(token);
   }
-  root.append(summary, comparison, el('h3', 'Word alignment · ' + run.scoring.mode), diff);
+  root.append(summary, comparison, el('h3', (mixed ? 'Token' : 'Word') + ' alignment · ' + run.scoring.mode), diff);
   if (evaluation.critical.length) {
     root.append(el('h3', 'Critical phrase matches'),
       el('p', evaluation.critical.map(item => (item.matched ? '✓ ' : '✗ ') + item.term).join(' · ')));
@@ -133,7 +138,9 @@ function runRecord(run) {
   return {
     ...rest, browser: browserText(run.browser), userAgent: run.browser.userAgent,
     rawTranscript: run.transcripts.final, interimTranscript: run.transcripts.interim,
-    fullTranscript: run.transcripts.full, wer: evaluation.wer, wordAccuracy: evaluation.accuracy,
+    fullTranscript: run.transcripts.full, errorMetric: errorMetric(evaluation), wer: evaluation.wer, mer: evaluation.mer ?? null,
+    wordAccuracy: errorMetric(evaluation) === 'WER' ? evaluation.accuracy : null,
+    tokenAccuracy: errorMetric(evaluation) === 'MER' ? evaluation.accuracy : null,
     substitutions: evaluation.substitution, deletions: evaluation.deletion, insertions: evaluation.insertion,
     critical: evaluation.critical, eventCount: events.length,
     ...Object.fromEntries(Object.entries(run.latency).map(([key, value]) => [key + 'Ms', value]))
@@ -161,6 +168,7 @@ function renderCase() {
   $('case-progress').textContent = item.id + (item.completed ? ' ✓' : '');
   $('case-notes').textContent = item.notes;
   $('case-notes').hidden = !item.notes;
+  $('mixed-help').hidden = !/\p{Script=Han}/u.test(item.reference);
   const link = $('case-audio');
   link.hidden = true;
   try {
@@ -204,7 +212,7 @@ function renderRun() {
   $('start').disabled = busy || !canStart;
   $('stop').disabled = !['starting', 'listening'].includes(state);
   $('reset').disabled = !current;
-  for (const id of ['language', 'method', 'interim-enabled', 'case-select', 'mode', 'fillers', 'audio-file', 'next', 'repeat', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
+  for (const id of ['language', 'method', 'interim-enabled', 'case-select', 'mode', 'fillers', 'audio-file', 'next', 'repeat', 'mixed-case', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
   $('save').disabled = !ready || Boolean(run?.saved);
   $('save').textContent = run?.saved ? 'Run saved' : 'Save run';
   for (const id of ['run-json', 'run-csv', 'event-json', 'event-csv']) $(id).disabled = !ready;
@@ -325,6 +333,19 @@ bind('next', () => {
   else notice('You’ve reached the end of the selected cases.');
 });
 bind('repeat', clearRun);
+bind('mixed-case', () => {
+  if (active()) return;
+  const missing = mixedCases.filter(item => !cases.some(existing => existing.id === item.id));
+  if (missing.length) {
+    cases = [...cases, ...structuredClone(missing)];
+    fillCaseOptions(batchSelection());
+    persist();
+  }
+  const prompt = cases.find(item =>
+    mixedCases.some(example => example.id === item.id) && /\p{Script=Han}/u.test(item.reference));
+  if (prompt) selectCase(prompt.id);
+  else notice('The built-in mixed prompt IDs are already used in this dataset.');
+});
 bind('new-session', () => {
   const nextSession = makeSession();
   if (nextSession.queue.length) selectCase(nextSession.queue[0]);
@@ -500,15 +521,16 @@ function breakdown(runs) {
   };
 }
 
-const overviewColumns = ['Group', 'Runs', 'Success rate', 'Average WER', 'Median WER', 'First result P50', 'First result P95', 'Critical terms'];
+const overviewColumns = ['Group', 'Runs', 'Success rate', 'Average WER', 'Median WER', 'Average MER', 'Median MER', 'First result P50', 'First result P95', 'Critical terms'];
 const overviewRow = (label, metrics) => [
   label, metrics.total, pct(metrics.successRate), pct(metrics.wer.average), pct(metrics.wer.p50),
+  pct(metrics.mer.average), pct(metrics.mer.p50),
   ms(metrics.latency.firstResult.p50), ms(metrics.latency.firstResult.p95), pct(metrics.critical.rate)
 ];
 
 function historicalRun(run) {
   const entry = el('details', '', 'run-item');
-  entry.append(el('summary', [run.caseId, run.success ? 'Recognized' : 'Failed', pct(run.evaluation.wer) + ' WER', localDate(run.startedAt)].join(' · ')),
+  entry.append(el('summary', [run.caseId, run.success ? 'Recognized' : 'Failed', pct(errorValue(run.evaluation)) + ' ' + errorMetric(run.evaluation), localDate(run.startedAt)].join(' · ')),
     detailsList([
       ['Browser / device', browserText(run.browser) + ' · ' + (run.device.platform || 'Unknown')],
       ['Input', inputLabels[run.method]],
@@ -553,6 +575,7 @@ function renderHistory() {
   stats.append(metric('Runs', String(total.total)), metric('Successful', String(total.successful)),
     metric('Failed', String(total.failed)), metric('Success rate', pct(total.successRate)),
     metric('Average WER', pct(total.wer.average)), metric('Median WER', pct(total.wer.p50)),
+    metric('Average MER', pct(total.mer.average)), metric('Median MER', pct(total.mer.p50)),
     metric('Critical phrase matches', pct(total.critical.rate)));
   root.append(el('p', visible.length + ' session(s) · ' + [...new Set(runs.map(run => inputLabels[run.method]))].join(' / '), 'muted'), stats);
   const groups = breakdown(runs);
