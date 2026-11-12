@@ -38,7 +38,6 @@ export class RecognitionRun {
     this.origin = performance.now();
     this.slots = [];
     this.closing = false;
-    this.resetRequested = false;
     this.waitingForResult = false;
   }
 
@@ -191,14 +190,6 @@ export class RecognitionRun {
   clearResultNotice() {
     clearTimeout(this.resultDeadline);
     this.waitingForResult = false;
-  }
-
-  requestReset() {
-    if (this.state === 'finished' || this.resetRequested) return;
-    this.resetRequested = true;
-    // Let a normal stop deliver its final result and release the native recognizer.
-    if (this.state === 'stopping') this.notify();
-    else this.abort('reset');
   }
 
   requestStop(reason = 'manual') {

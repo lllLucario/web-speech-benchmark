@@ -16,7 +16,7 @@ With Node 20 or newer, run `npm run dev` and open the printed localhost URL. Run
 2. Select a prompt, language, and input method. Tap **Start recognition**, grant the browser's permission, and wait for **Listening**.
 3. Read the order aloud or play a corresponding recording from another device using **External audio playback**.
 4. Tap **End recognition** on the same button or let the browser finish. Edit the text in **Transcript** after recognition ends. Review timing, error rates, and alignment under the benchmark results.
-5. Save the run and export JSON or CSV. To check the restart flow, start another run, end it, tap **Reset** immediately, then start again when the button is available. Repeat on both Safari and Chrome on iPhone. Repeat with permission denied and silence to check failure handling.
+5. Save the run and export JSON or CSV. To check the restart flow, start another run, end it, wait for the transcript, then tap **Reset** and start again. Reset is available when recognition has ended and the transcript contains recognized text. You can also start another run directly. Repeat on both Safari and Chrome on iPhone. Repeat with permission denied and silence to check failure handling.
 
 Constructor detection indicates API presence. Recognition may depend on browser permissions, device configuration, connectivity and the browser's own speech service. AudioTrack is restricted to eligible desktop Chrome configurations. A file is decoded in Web Audio and routed through a media destination to `start(track)`. Verify the result against a known recording in a quiet room. Failures never retry through the microphone.
 

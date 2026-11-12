@@ -68,7 +68,7 @@ test('AudioTrack attempts require a supported desktop browser and Web Audio prim
   assert.equal(audioTrackCandidate(environment), false);
 });
 
-test('Reset during a delayed stop waits for the browser and releases capture before the next run', async () => {
+test('A delayed stop releases capture before the next run', async () => {
   let owner = null;
   class ExclusiveRecognition {
     start() {
@@ -77,7 +77,7 @@ test('Reset during a delayed stop waits for the browser and releases capture bef
       this.onstart();
     }
     stop() {}
-    abort() { assert.fail('Reset interrupted the pending stop'); }
+    abort() { assert.fail('The pending stop was interrupted'); }
     end() {
       owner = null;
       this.onend();
@@ -88,8 +88,6 @@ test('Reset during a delayed stop waits for the browser and releases capture bef
   await first.start();
   const recognizer = first.recognition;
   first.requestStop();
-  first.requestReset();
-  assert.equal(first.resetRequested, true);
   assert.equal(first.state, 'stopping');
   assert.equal(owner, recognizer);
   recognizer.onresult({
@@ -114,7 +112,7 @@ test('Reset during a delayed stop waits for the browser and releases capture bef
   assert.equal(owner, null);
 });
 
-test('Reset during audio preparation cannot start a cancelled recognizer later', async () => {
+test('Cancelling audio preparation cannot start a recognizer later', async () => {
   class NeverStarts {
     start() { assert.fail('Cancelled recognition started'); }
     abort() { assert.fail('Recognition was not started'); }
@@ -124,7 +122,7 @@ test('Reset during audio preparation cannot start a cancelled recognizer later',
   let resolveTrack;
   capture.prepareTrack = () => new Promise(resolve => { resolveTrack = resolve; });
   const start = capture.start();
-  capture.requestReset();
+  capture.abort('cancelled');
   assert.equal(capture.state, 'finished');
   resolveTrack({ readyState: 'live', kind: 'audio' });
   await start;
@@ -157,7 +155,6 @@ test('A delayed end event triggers abort and still records the real end', async 
   const capture = makeRun(StuckRecognition);
   await capture.start();
   capture.requestStop();
-  capture.requestReset();
   t.mock.timers.tick(5000);
   assert.equal(capture.state, 'stopping');
   assert.equal(capture.run.errors[0].code, 'missing-end');

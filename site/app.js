@@ -206,6 +206,12 @@ function renderSave() {
   $('save').textContent = hasEdits ? 'Save edits' : saved ? 'Run saved' : 'Save run';
 }
 
+function canReset() {
+  return current?.state === 'finished' && Boolean(
+    current.run.transcripts.final.trim() && $('transcript').value.trim()
+  );
+}
+
 function renderRun() {
   const run = current?.run;
   const busy = active();
@@ -235,8 +241,6 @@ function renderRun() {
   const labels = { preparing: 'Cancel audio setup', starting: 'End recognition', listening: 'End recognition', stopping: 'Finishing…' };
   $('start-label').textContent = labels[state] ?? (method === 'track' ? 'Test audio file' : 'Start recognition');
   $('start').disabled = busy ? state === 'stopping' : !canStart;
-  $('reset').disabled = !current || current.resetRequested;
-  $('reset').textContent = current?.resetRequested ? 'Reset pending…' : 'Reset';
   for (const id of ['language', 'method', 'case-select', 'mode', 'fillers', 'audio-file', 'next', 'repeat', 'mixed-case', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
   renderSave();
   for (const id of ['run-json', 'run-csv', 'event-json', 'event-csv']) $(id).disabled = !ready;
@@ -244,6 +248,7 @@ function renderRun() {
   transcript.readOnly = !ready;
   const value = ready ? (run.editedTranscript ?? run.transcripts.final) : (run?.transcripts?.full ?? '');
   if (transcript.value !== value) transcript.value = value;
+  $('reset').disabled = !canReset();
   $('latencies').replaceChildren(...Object.entries(latencyLabels).map(([key, label]) => metric(label, ms(run?.latency[key]))));
   const events = run?.events ?? [];
   $('event-count').textContent = '(' + events.length + ')';
@@ -317,10 +322,6 @@ function startRun() {
   current = new RecognitionRun(Recognition, run, () => {
     if (current?.run !== run) return;
     if (current.state === 'finished') {
-      if (current.resetRequested) {
-        clearRun();
-        return;
-      }
       run.success = Boolean(run.transcripts.final.trim()) && !run.errors.length &&
         ['manual', 'browser', 'audio-ended'].includes(run.termination);
       run.evaluation = score(run.reference, run.transcripts.final, run.criticalTerms, run.scoring);
@@ -359,11 +360,11 @@ bind('transcript', () => {
   const { run } = current;
   const value = $('transcript').value;
   run.editedTranscript = value === run.transcripts.final ? undefined : value;
+  $('reset').disabled = !canReset();
   renderSave();
 }, 'input');
 bind('reset', () => {
-  if (active()) current.requestReset();
-  else clearRun();
+  if (canReset()) clearRun();
 });
 bind('save', saveRun);
 bind('case-select', () => selectCase($('case-select').value), 'change');

@@ -54,6 +54,7 @@ input[type=checkbox] { accent-color: var(--olive); width: 1.1rem; height: 1.1rem
 button, .file-button { min-height: 2.75rem; padding: .5rem .85rem; border: 1px solid #9c9d87; border-radius: .3rem; background: var(--white); font-size: .88rem; font-weight: 650; cursor: pointer; }
 button:hover:not(:disabled), .file-button:hover { border-color: var(--olive); background: var(--lime); color: var(--olive); }
 button:disabled { cursor: default; opacity: .55; }
+#reset:disabled { color: #575956; background: #e7e8e5; border-color: #c6c8c4; opacity: 1; }
 :focus-visible { outline: 3px solid #596b32; outline-offset: 3px; }
 .primary { color: var(--white); background: var(--olive); border-color: var(--olive); }
 .controls, .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; }
