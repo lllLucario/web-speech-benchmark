@@ -171,7 +171,10 @@ test('iPhone compatibility waits for each prompt and ends consecutive sessions n
   let starts = 0;
   const previousWindow = globalThis.window;
   globalThis.window = {
-    SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } },
+    SpeechSynthesisUtterance: class {
+      volume = 1;
+      constructor(text) { this.text = text; }
+    },
     speechSynthesis: {
       speak(utterance) { prompt = utterance; },
       cancel() { assert.fail('A completed prompt should not be cancelled'); }
@@ -188,13 +191,15 @@ test('iPhone compatibility waits for each prompt and ends consecutive sessions n
     stop() { assert.fail('Compatibility mode must wait for native end'); }
   }
 
-  for (const order of ['one coffee', 'two coffees']) {
+  for (const [order, muted] of [['one coffee', false], ['two coffees', true]]) {
     const capture = makeRun(SingleUtterance);
     capture.run.iphoneCompatibility = true;
+    capture.run.mutedStartupAudio = muted;
     const starting = capture.start();
     const before = starts;
     assert.equal(capture.state, 'preparing');
     assert.equal(prompt.text, 'Ready');
+    assert.equal(prompt.volume, muted ? 0 : 1);
     prompt.onend();
     await starting;
     assert.equal(starts, before + 1);

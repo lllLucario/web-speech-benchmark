@@ -153,6 +153,7 @@ export class RecognitionRun {
       const chinese = this.run.language.startsWith('zh');
       const prompt = new SpeechSynthesisUtterance(chinese ? '请说' : 'Ready');
       prompt.lang = this.run.language;
+      if (this.run.mutedStartupAudio) prompt.volume = 0;
       const detach = () => {
         prompt.onend = null;
         prompt.onerror = null;

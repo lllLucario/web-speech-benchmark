@@ -26,6 +26,8 @@ const ios = /iPhone|iPad|iPod/u.test(browser.userAgent) ||
 
 const iphoneCompatibilityAvailable = ios && Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
 
+const muteStartupAudio = new URLSearchParams(location.search).get('startup-audio') === 'muted';
+
 const STORAGE = 'order-signal-v1';
 let storageError = false;
 function readStorage() {
@@ -315,6 +317,7 @@ function queueIds() {
 const configuration = () => ({
   language: $('language').value, method: $('method').value,
   iphoneCompatibility: iphoneCompatibilityAvailable && $('method').value === 'live',
+  mutedStartupAudio: muteStartupAudio && iphoneCompatibilityAvailable && $('method').value === 'live',
   network: $('network').value.trim(), environment: $('environment').value
 });
 
@@ -329,7 +332,11 @@ function makeSession() {
 function sessionForRun() {
   const settings = configuration();
   if (!session) return makeSession();
-  const previous = { ...session, iphoneCompatibility: Boolean(session.iphoneCompatibility) };
+  const previous = {
+    ...session,
+    iphoneCompatibility: Boolean(session.iphoneCompatibility),
+    mutedStartupAudio: Boolean(session.mutedStartupAudio)
+  };
   if (Object.entries(settings).some(([key, value]) => previous[key] !== value)) return makeSession();
   return session;
 }
