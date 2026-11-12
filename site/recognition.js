@@ -126,7 +126,7 @@ export class RecognitionRun {
         if (track.readyState !== 'live' || track.kind !== 'audio') throw new Error('An active audio track is required.');
       }
       if (this.run.iphoneCompatibility) {
-        this.deadline = setTimeout(() => this.timeout('The ready prompt did not finish. Check the device audio and try again.'), 10000);
+        this.deadline = setTimeout(() => this.timeout('Starting took too long. Check your device audio and try again.'), 10000);
         await this.playReadyPrompt();
         if (this.state !== 'preparing') return;
         clearTimeout(this.deadline);
@@ -171,7 +171,7 @@ export class RecognitionRun {
       prompt.onerror = event => {
         detach();
         this.log('readyPromptError', { code: event.error });
-        reject(new Error('The ready prompt could not play. Check device audio and try again.'));
+        reject(new Error('Could not start listening. Check your device audio and try again.'));
       };
       this.log('readyPromptRequested');
       speechSynthesis.speak(prompt);

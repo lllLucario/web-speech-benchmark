@@ -222,7 +222,14 @@ function renderRun() {
   const method = $('method').value;
   const canStart = Recognition && window.isSecureContext && (method !== 'track' || (trackAvailable && file));
   const state = current?.state ?? 'idle';
-  const statuses = { idle: Recognition ? 'Idle' : 'API unavailable', preparing: 'Preparing', starting: 'Starting', listening: 'Listening', stopping: 'Finishing', finished: run?.success ? 'Complete' : 'Unsuccessful' };
+  const statuses = {
+    idle: Recognition ? 'Idle' : 'API unavailable',
+    preparing: method === 'track' ? 'Preparing audio' : 'Starting…',
+    starting: 'Starting…',
+    listening: 'Listening',
+    stopping: 'Finishing',
+    finished: run?.success ? 'Complete' : 'Unsuccessful'
+  };
   const status = $('status');
   if (status.textContent !== statuses[state]) status.textContent = statuses[state];
   status.dataset.state = state;
@@ -246,7 +253,7 @@ function renderRun() {
   $('capture-hint').hidden = !captureHint;
   const labels = compatibility
     ? {
-        preparing: 'Cancel ready prompt', starting: 'Starting…',
+        preparing: 'Cancel', starting: 'Starting…',
         listening: current.waitingForResult ? 'Cancel stalled run' : 'Ends automatically', stopping: 'Finishing…'
       }
     : { preparing: 'Cancel audio setup', starting: 'End recognition', listening: 'End recognition', stopping: 'Finishing…' };
@@ -265,7 +272,12 @@ function renderRun() {
   $('latencies').replaceChildren(...Object.entries(latencyLabels).map(([key, label]) => metric(label, ms(run?.latency[key]))));
   const events = run?.events ?? [];
   $('event-count').textContent = '(' + events.length + ')';
-  $('events').replaceChildren(...events.map(event => el('li', ms(event.ms) + ' · ' + event.name +
+  const eventLabels = {
+    readyPromptRequested: 'Startup audio requested',
+    readyPromptEnd: 'Startup audio finished',
+    readyPromptError: 'Startup audio failed'
+  };
+  $('events').replaceChildren(...events.map(event => el('li', ms(event.ms) + ' · ' + (eventLabels[event.name] ?? event.name) +
     (event.code ? ' · ' + event.code : '') + (event.newFinal ? ' · new final' : ''))));
   if (ready || state === 'idle' || state === 'preparing') $('accuracy').replaceChildren(accuracyView(ready ? run : null));
   const sequence = queueIds();
