@@ -38,6 +38,8 @@ export class RecognitionRun {
     this.origin = performance.now();
     this.slots = [];
     this.closing = false;
+    this.resetRequested = false;
+    this.waitingForResult = false;
   }
 
   log(name, details = {}) {
@@ -72,6 +74,13 @@ export class RecognitionRun {
         if (this.state === 'starting') {
           clearTimeout(this.deadline);
           this.state = 'listening';
+          if (!this.slots.some(slot => slot.text.trim())) {
+            this.resultDeadline = setTimeout(() => {
+              if (this.state !== 'listening') return;
+              this.waitingForResult = true;
+              this.notify();
+            }, 8000);
+          }
           try {
             if (this.source) {
               this.source.start();
@@ -92,6 +101,7 @@ export class RecognitionRun {
           text: result[0].transcript, isFinal: result.isFinal, confidence: result[0].confidence
         }));
         this.slots = slots;
+        if (slots.some(slot => slot.text.trim())) this.clearResultNotice();
         this.log('onresult', { resultIndex: event.resultIndex, results, hasResult: slots.some(slot => slot.text.length > 0), newFinal });
         this.notify();
       };
@@ -99,6 +109,7 @@ export class RecognitionRun {
         if (this.state === 'finished') return;
         this.log('onerror', { code: event.error, message: event.message });
         this.fail(event.error, browserErrors[event.error] || event.message || 'The recognition service reported an error.', event.message);
+        this.clearResultNotice();
         this.stopAudio();
         this.state = 'stopping';
         this.armEndTimeout();
@@ -114,8 +125,8 @@ export class RecognitionRun {
       if (this.run.method === 'track') {
         this.deadline = setTimeout(() => this.timeout('Audio preparation timed out.'), 20000);
         track = await this.prepareTrack(file);
+        if (this.state !== 'preparing') return;
         clearTimeout(this.deadline);
-        if (this.state === 'finished') return;
         if (track.readyState !== 'live' || track.kind !== 'audio') throw new Error('An active audio track is required.');
       }
       this.state = 'starting';
@@ -141,7 +152,7 @@ export class RecognitionRun {
       context.resume(),
       file.arrayBuffer().then(bytes => context.decodeAudioData(bytes))
     ]);
-    if (this.state === 'finished') return null;
+    if (this.state !== 'preparing') return null;
     if (context.state !== 'running') throw new Error('The browser suspended the audio context.');
     const destination = context.createMediaStreamDestination();
     destination.channelCount = 1;
@@ -177,11 +188,25 @@ export class RecognitionRun {
     }, 5000);
   }
 
+  clearResultNotice() {
+    clearTimeout(this.resultDeadline);
+    this.waitingForResult = false;
+  }
+
+  requestReset() {
+    if (this.state === 'finished' || this.resetRequested) return;
+    this.resetRequested = true;
+    // Let a normal stop deliver its final result and release the native recognizer.
+    if (this.state === 'stopping') this.notify();
+    else this.abort('reset');
+  }
+
   requestStop(reason = 'manual') {
     if (!['starting', 'listening'].includes(this.state)) return;
     this.run.termination = reason;
     this.run.manualStop = reason === 'manual';
     this.state = 'stopping';
+    this.clearResultNotice();
     this.log(reason === 'manual' ? 'stop()' : 'stop() [audio ended]');
     this.armEndTimeout();
     try {
@@ -199,16 +224,19 @@ export class RecognitionRun {
     if (this.state === 'finished' || this.closing) return;
     this.closing = true;
     this.run.termination = reason;
-    if (this.invoked) {
-      this.log('abort()', { reason });
-      try { this.recognition.abort(); } catch (error) { this.fail('abort-error', error.message); }
+    if (!this.invoked) {
+      this.finish(reason);
+      return;
     }
-    this.stopAudio();
+    this.state = 'stopping';
+    this.clearResultNotice();
+    clearTimeout(this.deadline);
+    // Keep handlers briefly so genuine trailing onerror/onend events can be recorded.
+    this.deadline = setTimeout(() => this.finish(reason), 1200);
+    this.log('abort()', { reason });
+    try { this.recognition.abort(); } catch (error) { this.fail('abort-error', error.message); }
     if (this.state !== 'finished') {
-      this.state = 'stopping';
-      clearTimeout(this.deadline);
-      // Keep handlers briefly so genuine trailing onerror/onend events can be recorded.
-      this.deadline = setTimeout(() => this.finish(reason), 1200);
+      this.stopAudio();
       this.notify();
     }
   }
@@ -228,6 +256,7 @@ export class RecognitionRun {
 
   finish(reason) {
     clearTimeout(this.deadline);
+    this.clearResultNotice();
     this.state = 'finished';
     this.run.termination = reason;
     this.run.finishedAt = new Date().toISOString();
@@ -236,6 +265,7 @@ export class RecognitionRun {
       for (const event of ['start', 'audiostart', 'soundstart', 'speechstart', 'result', 'speechend', 'soundend', 'audioend', 'error', 'end']) {
         this.recognition['on' + event] = null;
       }
+      this.recognition = null;
     }
     this.notify();
   }

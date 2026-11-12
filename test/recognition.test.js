@@ -8,8 +8,8 @@ class FakeRecognition {
   abort() { this.onend(); }
 }
 
-function makeRun() {
-  return new RecognitionRun(FakeRecognition, {
+function makeRun(Recognition = FakeRecognition) {
+  return new RecognitionRun(Recognition, {
     language: 'en-AU', method: 'live', interim: true, errors: [], events: []
   }, () => {});
 }
@@ -23,6 +23,7 @@ test('manual stop records only genuine browser timing events and supports anothe
     resultIndex: 0,
     results: [Object.assign([{ transcript: ' two coffees', confidence: 0.9 }], { isFinal: true })]
   });
+  const recognition = capture.recognition;
   capture.requestStop();
   assert.equal(capture.state, 'finished');
   assert.equal(capture.run.termination, 'manual');
@@ -30,7 +31,8 @@ test('manual stop records only genuine browser timing events and supports anothe
   assert.equal(capture.run.transcripts.final, ' two coffees');
   assert.ok(capture.run.latency.stopToEnd >= 0);
   assert.equal(capture.run.latency.speechToEnd, null);
-  assert.equal(capture.recognition.onresult, null);
+  assert.equal(recognition.onresult, null);
+  assert.equal(capture.recognition, null);
 
   const next = makeRun();
   await next.start();
@@ -64,4 +66,105 @@ test('AudioTrack attempts require a supported desktop browser and Web Audio prim
   assert.equal(audioTrackCandidate(environment), false);
   delete environment.navigator.userAgentData;
   assert.equal(audioTrackCandidate(environment), false);
+});
+
+test('Reset during a delayed stop waits for the browser and releases capture before the next run', async () => {
+  let owner = null;
+  class ExclusiveRecognition {
+    start() {
+      assert.equal(owner, null);
+      owner = this;
+      this.onstart();
+    }
+    stop() {}
+    abort() { assert.fail('Reset interrupted the pending stop'); }
+    end() {
+      owner = null;
+      this.onend();
+    }
+  }
+
+  const first = makeRun(ExclusiveRecognition);
+  await first.start();
+  const recognizer = first.recognition;
+  first.requestStop();
+  first.requestReset();
+  assert.equal(first.resetRequested, true);
+  assert.equal(first.state, 'stopping');
+  assert.equal(owner, recognizer);
+  recognizer.onresult({
+    resultIndex: 0,
+    results: [Object.assign([{ transcript: ' first order' }], { isFinal: true })]
+  });
+  recognizer.end();
+  assert.equal(first.state, 'finished');
+  assert.equal(first.recognition, null);
+  assert.equal(first.run.transcripts.final, ' first order');
+  assert.deepEqual(first.run.events.map(event => event.name), ['start()', 'onstart', 'stop()', 'onresult', 'onend']);
+
+  const second = makeRun(ExclusiveRecognition);
+  await second.start();
+  second.recognition.onresult({
+    resultIndex: 0,
+    results: [Object.assign([{ transcript: ' second order' }], { isFinal: true })]
+  });
+  second.requestStop();
+  second.recognition.end();
+  assert.equal(second.run.transcripts.final, ' second order');
+  assert.equal(owner, null);
+});
+
+test('Reset during audio preparation cannot start a cancelled recognizer later', async () => {
+  class NeverStarts {
+    start() { assert.fail('Cancelled recognition started'); }
+    abort() { assert.fail('Recognition was not started'); }
+  }
+  const capture = makeRun(NeverStarts);
+  capture.run.method = 'track';
+  let resolveTrack;
+  capture.prepareTrack = () => new Promise(resolve => { resolveTrack = resolve; });
+  const start = capture.start();
+  capture.requestReset();
+  assert.equal(capture.state, 'finished');
+  resolveTrack({ readyState: 'live', kind: 'audio' });
+  await start;
+  assert.equal(capture.recognition, null);
+  assert.deepEqual(capture.run.events, []);
+});
+
+test('A silent session shows a hint and can still receive speech without restarting', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const capture = makeRun();
+  await capture.start();
+  t.mock.timers.tick(8000);
+  assert.equal(capture.state, 'listening');
+  assert.equal(capture.waitingForResult, true);
+  capture.recognition.onresult({
+    resultIndex: 0,
+    results: [Object.assign([{ transcript: ' one coffee' }], { isFinal: true })]
+  });
+  assert.equal(capture.waitingForResult, false);
+  capture.requestStop();
+  assert.equal(capture.run.transcripts.final, ' one coffee');
+});
+
+test('A delayed end event triggers abort and still records the real end', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  class StuckRecognition extends FakeRecognition {
+    stop() {}
+    abort() {}
+  }
+  const capture = makeRun(StuckRecognition);
+  await capture.start();
+  capture.requestStop();
+  capture.requestReset();
+  t.mock.timers.tick(5000);
+  assert.equal(capture.state, 'stopping');
+  assert.equal(capture.run.errors[0].code, 'missing-end');
+  assert.equal(capture.run.latency.stopToEnd, null);
+  assert.equal(capture.run.events.at(-1).name, 'abort()');
+  capture.recognition.onend();
+  assert.equal(capture.state, 'finished');
+  assert.equal(capture.recognition, null);
+  assert.ok(capture.run.latency.stopToEnd >= 0);
 });

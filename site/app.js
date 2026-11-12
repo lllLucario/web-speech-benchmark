@@ -21,6 +21,9 @@ const device = {
   screen: { width: screen.width, height: screen.height, pixelRatio: devicePixelRatio }
 };
 
+const ios = /iPhone|iPad|iPod/u.test(browser.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 const STORAGE = 'order-signal-v1';
 let storageError = false;
 function readStorage() {
@@ -220,10 +223,20 @@ function renderRun() {
     !Recognition ? 'This browser does not expose the speech recognition API.' : '');
   if ($('error').textContent !== error) $('error').textContent = error;
   $('error').hidden = !error;
+  const captureHint = current?.waitingForResult
+    ? 'No transcription yet. If you are already speaking, end the run and try again.'
+    : ios && ready && !run.transcripts.full.trim() &&
+      run.events.some(event => event.name === 'onstart') &&
+      !run.errors.some(item => ['not-allowed', 'service-not-allowed', 'network'].includes(item.code))
+      ? 'If your iPhone or iPad still produces no text on the next attempt, fully close and reopen the browser.'
+      : '';
+  $('capture-hint').textContent = captureHint;
+  $('capture-hint').hidden = !captureHint;
   const labels = { preparing: 'Cancel audio setup', starting: 'End recognition', listening: 'End recognition', stopping: 'Finishing…' };
   $('start-label').textContent = labels[state] ?? (method === 'track' ? 'Test audio file' : 'Start recognition');
   $('start').disabled = busy ? state === 'stopping' : !canStart;
-  $('reset').disabled = !current;
+  $('reset').disabled = !current || current.resetRequested;
+  $('reset').textContent = current?.resetRequested ? 'Reset pending…' : 'Reset';
   for (const id of ['language', 'method', 'case-select', 'mode', 'fillers', 'audio-file', 'next', 'repeat', 'mixed-case', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
   renderSave();
   for (const id of ['run-json', 'run-csv', 'event-json', 'event-csv']) $(id).disabled = !ready;
@@ -290,7 +303,7 @@ function sessionForRun() {
 
 function startRun() {
   if (active() || $('start').disabled) return;
-  $('preview').pause();
+  if (!$('preview').paused) $('preview').pause();
   const item = selectedCase();
   const parent = sessionForRun();
   const run = {
@@ -304,6 +317,10 @@ function startRun() {
   current = new RecognitionRun(Recognition, run, () => {
     if (current?.run !== run) return;
     if (current.state === 'finished') {
+      if (current.resetRequested) {
+        clearRun();
+        return;
+      }
       run.success = Boolean(run.transcripts.final.trim()) && !run.errors.length &&
         ['manual', 'browser', 'audio-ended'].includes(run.termination);
       run.evaluation = score(run.reference, run.transcripts.final, run.criticalTerms, run.scoring);
@@ -345,12 +362,8 @@ bind('transcript', () => {
   renderSave();
 }, 'input');
 bind('reset', () => {
-  if (active()) {
-    const discarded = current;
-    // Wait for the old browser session to release its recognition service.
-    discarded.onChange = () => { if (discarded.state === 'finished') clearRun(); else renderRun(); };
-    discarded.abort('reset');
-  } else clearRun();
+  if (active()) current.requestReset();
+  else clearRun();
 });
 bind('save', saveRun);
 bind('case-select', () => selectCase($('case-select').value), 'change');
@@ -384,7 +397,7 @@ bind('new-session', () => {
 bind('method', () => { renderMethod(); renderRun(); }, 'change');
 bind('mode', () => { $('fillers-label').hidden = $('mode').value !== 'normalized'; }, 'change');
 bind('audio-file', () => {
-  $('preview').pause();
+  if (!$('preview').paused) $('preview').pause();
   if (previewUrl) URL.revokeObjectURL(previewUrl);
   file = $('audio-file').files[0] ?? null;
   previewUrl = file ? URL.createObjectURL(file) : '';
