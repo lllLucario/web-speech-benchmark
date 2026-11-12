@@ -191,8 +191,7 @@ function renderCase() {
 
 function renderMethod() {
   const method = $('method').value;
-  $('iphone-settings').hidden = !iphoneCompatibilityAvailable || method !== 'live';
-  $('iphone-help').hidden = !$('iphone-compatibility').checked;
+  $('iphone-help').hidden = !iphoneCompatibilityAvailable || method !== 'live';
   $('audio-area').hidden = method === 'live';
   $('file-label').hidden = method !== 'track';
   $('preview').hidden = method !== 'track' || !file;
@@ -241,9 +240,7 @@ function renderRun() {
     : ios && ready && !run.transcripts.full.trim() &&
       run.events.some(event => event.name === 'onstart') &&
       !run.errors.some(item => ['not-allowed', 'service-not-allowed', 'network'].includes(item.code))
-      ? (iphoneCompatibilityAvailable && method === 'live' && !compatibility
-          ? 'Fully close and reopen the browser, then try iPhone compatibility mode.'
-          : 'If the next run still produces no text, fully close and reopen the browser.')
+      ? 'If the next run still produces no text, fully close and reopen the browser.'
       : '';
   $('capture-hint').textContent = captureHint;
   $('capture-hint').hidden = !captureHint;
@@ -257,7 +254,7 @@ function renderRun() {
   $('start').disabled = busy
     ? state === 'stopping' || (compatibility && state !== 'preparing' && !current.waitingForResult)
     : !canStart;
-  for (const id of ['language', 'method', 'case-select', 'mode', 'fillers', 'audio-file', 'iphone-compatibility', 'next', 'repeat', 'mixed-case', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
+  for (const id of ['language', 'method', 'case-select', 'mode', 'fillers', 'audio-file', 'next', 'repeat', 'mixed-case', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
   renderSave();
   for (const id of ['run-json', 'run-csv', 'event-json', 'event-csv']) $(id).disabled = !ready;
   const transcript = $('transcript');
@@ -305,7 +302,7 @@ function queueIds() {
 }
 const configuration = () => ({
   language: $('language').value, method: $('method').value,
-  iphoneCompatibility: iphoneCompatibilityAvailable && $('method').value === 'live' && $('iphone-compatibility').checked,
+  iphoneCompatibility: iphoneCompatibilityAvailable && $('method').value === 'live',
   network: $('network').value.trim(), environment: $('environment').value
 });
 
@@ -417,7 +414,6 @@ bind('new-session', () => {
   notice('New benchmark session started.');
 });
 bind('method', () => { renderMethod(); renderRun(); }, 'change');
-bind('iphone-compatibility', renderMethod, 'change');
 bind('mode', () => { $('fillers-label').hidden = $('mode').value !== 'normalized'; }, 'change');
 bind('audio-file', () => {
   if (!$('preview').paused) $('preview').pause();
@@ -459,7 +455,6 @@ if (session) {
   $('method').value = session.method;
   $('network').value = session.network;
   $('environment').value = session.environment;
-  $('iphone-compatibility').checked = Boolean(session.iphoneCompatibility);
 }
 fillCaseOptions(session?.queue);
 renderMethod();
@@ -598,7 +593,7 @@ function historicalRun(run) {
   entry.append(el('summary', [run.caseId, run.success ? 'Recognized' : 'Failed', pct(errorValue(run.evaluation)) + ' ' + errorMetric(run.evaluation), localDate(run.startedAt)].join(' · ')),
     detailsList([
       ['Browser / device', browserText(run.browser) + ' · ' + (run.device.platform || 'Unknown')],
-      ['Input', inputLabels[run.method] + (run.iphoneCompatibility ? ' · iPhone compatibility mode' : '')],
+      ['Input', inputLabels[run.method] + (run.iphoneCompatibility ? ' · Automatic end on iPhone' : '')],
       ['Language', run.language],
       ['Network', run.network || 'Unspecified'],
       ['Environment', run.environment],
