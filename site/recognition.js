@@ -58,7 +58,7 @@ export class RecognitionRun {
       const recognition = this.recognition = new this.Recognition();
       recognition.lang = this.run.language;
       recognition.interimResults = this.run.interim;
-      recognition.continuous = !this.run.iphoneCompatibility;
+      recognition.continuous = true;
 
       for (const name of ['audiostart', 'soundstart', 'speechstart', 'speechend', 'soundend', 'audioend']) {
         recognition['on' + name] = () => {
@@ -94,10 +94,7 @@ export class RecognitionRun {
           text: result[0].transcript, isFinal: result.isFinal, confidence: result[0].confidence
         }));
         this.slots = slots;
-        if (slots.some(slot => slot.text.trim())) {
-          this.clearResultNotice();
-          if (this.run.iphoneCompatibility && this.state === 'listening') this.armResultNotice();
-        }
+        if (slots.some(slot => slot.text.trim())) this.clearResultNotice();
         this.log('onresult', { resultIndex: event.resultIndex, results, hasResult: slots.some(slot => slot.text.length > 0), newFinal });
         this.notify();
       };
@@ -125,12 +122,6 @@ export class RecognitionRun {
         clearTimeout(this.deadline);
         if (track.readyState !== 'live' || track.kind !== 'audio') throw new Error('An active audio track is required.');
       }
-      if (this.run.iphoneCompatibility) {
-        this.deadline = setTimeout(() => this.timeout('The ready prompt did not finish. Check the device audio and try again.'), 10000);
-        await this.playReadyPrompt();
-        if (this.state !== 'preparing') return;
-        clearTimeout(this.deadline);
-      }
       this.state = 'starting';
       this.deadline = setTimeout(() => this.timeout('The browser did not confirm recognition start.'), 30000);
       this.log('start()');
@@ -145,37 +136,6 @@ export class RecognitionRun {
       this.fail(code, this.run.method === 'track' ? 'AudioTrack could not start. ' + error.message : error.message);
       this.finish('start-error');
     }
-  }
-
-  playReadyPrompt() {
-    const { speechSynthesis, SpeechSynthesisUtterance } = window;
-    return new Promise((resolve, reject) => {
-      const chinese = this.run.language.startsWith('zh');
-      const prompt = new SpeechSynthesisUtterance(chinese ? '请说' : 'Ready');
-      prompt.lang = this.run.language;
-      const detach = () => {
-        prompt.onend = null;
-        prompt.onerror = null;
-        this.cancelPrompt = null;
-      };
-      this.cancelPrompt = () => {
-        detach();
-        speechSynthesis.cancel();
-        resolve();
-      };
-      prompt.onend = () => {
-        detach();
-        this.log('readyPromptEnd');
-        resolve();
-      };
-      prompt.onerror = event => {
-        detach();
-        this.log('readyPromptError', { code: event.error });
-        reject(new Error('The ready prompt could not play. Check device audio and try again.'));
-      };
-      this.log('readyPromptRequested');
-      speechSynthesis.speak(prompt);
-    });
   }
 
   async prepareTrack(file) {
@@ -235,7 +195,7 @@ export class RecognitionRun {
   }
 
   requestStop(reason = 'manual') {
-    if (this.run.iphoneCompatibility || !['starting', 'listening'].includes(this.state)) return;
+    if (!['starting', 'listening'].includes(this.state)) return;
     this.run.termination = reason;
     this.run.manualStop = reason === 'manual';
     this.state = 'stopping';
@@ -293,7 +253,6 @@ export class RecognitionRun {
     this.state = 'finished';
     this.run.termination = reason;
     this.run.finishedAt = new Date().toISOString();
-    this.cancelPrompt?.();
     this.stopAudio();
     if (this.recognition) {
       for (const event of ['start', 'audiostart', 'soundstart', 'speechstart', 'result', 'speechend', 'soundend', 'audioend', 'error', 'end']) {

@@ -166,72 +166,24 @@ test('A delayed end event triggers abort and still records the real end', async 
   assert.ok(capture.run.latency.stopToEnd >= 0);
 });
 
-test('iPhone compatibility waits for each prompt and ends consecutive sessions naturally', async t => {
-  let prompt;
-  let starts = 0;
-  const previousWindow = globalThis.window;
-  globalThis.window = {
-    SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } },
-    speechSynthesis: {
-      speak(utterance) { prompt = utterance; },
-      cancel() { assert.fail('A completed prompt should not be cancelled'); }
-    }
-  };
-  t.after(() => { globalThis.window = previousWindow; });
-  class SingleUtterance extends FakeRecognition {
-    start() {
-      assert.equal(this.continuous, false);
-      assert.equal(prompt.onend, null);
-      starts++;
-      super.start();
-    }
-    stop() { assert.fail('Compatibility mode must wait for native end'); }
-  }
-
-  for (const order of ['one coffee', 'two coffees']) {
-    const capture = makeRun(SingleUtterance);
-    capture.run.iphoneCompatibility = true;
-    const starting = capture.start();
-    const before = starts;
-    assert.equal(capture.state, 'preparing');
-    assert.equal(prompt.text, 'Ready');
-    prompt.onend();
-    await starting;
-    assert.equal(starts, before + 1);
-    assert.equal(capture.state, 'listening');
-    capture.requestStop();
-    capture.recognition.onresult({
-      resultIndex: 0,
-      results: [Object.assign([{ transcript: order }], { isFinal: true })]
-    });
-    capture.recognition.onend();
-    assert.equal(capture.run.transcripts.final, order);
-    assert.equal(capture.run.termination, 'browser');
-    assert.deepEqual(capture.run.events.map(event => event.name),
-      ['readyPromptRequested', 'readyPromptEnd', 'start()', 'onstart', 'onresult', 'onend']);
-  }
-});
-
-test('Cancelling an iPhone ready prompt does not start the microphone', async t => {
-  let prompt;
-  let cancelled = false;
-  const previousWindow = globalThis.window;
-  globalThis.window = {
-    SpeechSynthesisUtterance: class {},
-    speechSynthesis: {
-      speak(utterance) { prompt = utterance; },
-      cancel() { cancelled = true; }
-    }
-  };
-  t.after(() => { globalThis.window = previousWindow; });
+test('Continuous recognition combines multiple final segments and ends on manual stop', async () => {
   const capture = makeRun();
-  capture.run.iphoneCompatibility = true;
-  const starting = capture.start();
-  capture.abort('cancelled');
-  assert.equal(cancelled, true);
-  assert.equal(prompt.onend, null);
-  await starting;
+  await capture.start();
+  assert.equal(capture.recognition.continuous, true);
+  const result = transcript => Object.assign([{ transcript }], { isFinal: true });
+  const first = result('I would like two cheeseburgers');
+  capture.recognition.onresult({ resultIndex: 0, results: [first] });
+  capture.recognition.onspeechend();
+  assert.equal(capture.state, 'listening');
+
+  capture.recognition.onspeechstart();
+  capture.recognition.onresult({
+    resultIndex: 1, results: [first, result(' and a large orange juice without ice')]
+  });
+  assert.equal(capture.state, 'listening');
+  capture.requestStop();
   assert.equal(capture.state, 'finished');
-  assert.equal(capture.recognition, null);
-  assert.equal(capture.run.events.some(event => event.name === 'start()'), false);
+  assert.equal(capture.run.transcripts.final,
+    'I would like two cheeseburgers and a large orange juice without ice');
+  assert.equal(capture.run.manualStop, true);
 });
