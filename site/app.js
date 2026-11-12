@@ -24,6 +24,8 @@ const device = {
 const ios = /iPhone|iPad|iPod/u.test(browser.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+const iphoneCompatibilityAvailable = ios && Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
+
 const STORAGE = 'order-signal-v1';
 let storageError = false;
 function readStorage() {
@@ -189,6 +191,7 @@ function renderCase() {
 
 function renderMethod() {
   const method = $('method').value;
+  $('iphone-help').hidden = !iphoneCompatibilityAvailable || method !== 'live';
   $('audio-area').hidden = method === 'live';
   $('file-label').hidden = method !== 'track';
   $('preview').hidden = method !== 'track' || !file;
@@ -229,8 +232,11 @@ function renderRun() {
     !Recognition ? 'This browser does not expose the speech recognition API.' : '');
   if ($('error').textContent !== error) $('error').textContent = error;
   $('error').hidden = !error;
+  const compatibility = Boolean(run?.iphoneCompatibility);
   const captureHint = current?.waitingForResult
-    ? 'No transcription yet. If you are already speaking, end the run and try again.'
+    ? compatibility
+      ? 'The browser has not ended the run yet. If it is stuck, cancel the run and reopen the browser.'
+      : 'No transcription yet. If you are already speaking, end the run and try again.'
     : ios && ready && !run.transcripts.full.trim() &&
       run.events.some(event => event.name === 'onstart') &&
       !run.errors.some(item => ['not-allowed', 'service-not-allowed', 'network'].includes(item.code))
@@ -238,9 +244,16 @@ function renderRun() {
       : '';
   $('capture-hint').textContent = captureHint;
   $('capture-hint').hidden = !captureHint;
-  const labels = { preparing: 'Cancel audio setup', starting: 'End recognition', listening: 'End recognition', stopping: 'Finishing…' };
+  const labels = compatibility
+    ? {
+        preparing: 'Cancel ready prompt', starting: 'Starting…',
+        listening: current.waitingForResult ? 'Cancel stalled run' : 'Ends automatically', stopping: 'Finishing…'
+      }
+    : { preparing: 'Cancel audio setup', starting: 'End recognition', listening: 'End recognition', stopping: 'Finishing…' };
   $('start-label').textContent = labels[state] ?? (method === 'track' ? 'Test audio file' : 'Start recognition');
-  $('start').disabled = busy ? state === 'stopping' : !canStart;
+  $('start').disabled = busy
+    ? state === 'stopping' || (compatibility && state !== 'preparing' && !current.waitingForResult)
+    : !canStart;
   for (const id of ['language', 'method', 'case-select', 'mode', 'fillers', 'audio-file', 'next', 'repeat', 'mixed-case', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
   renderSave();
   for (const id of ['run-json', 'run-csv', 'event-json', 'event-csv']) $(id).disabled = !ready;
@@ -289,6 +302,7 @@ function queueIds() {
 }
 const configuration = () => ({
   language: $('language').value, method: $('method').value,
+  iphoneCompatibility: iphoneCompatibilityAvailable && $('method').value === 'live',
   network: $('network').value.trim(), environment: $('environment').value
 });
 
@@ -302,8 +316,9 @@ function makeSession() {
 
 function sessionForRun() {
   const settings = configuration();
-  if (!session || session.iphoneCompatibility ||
-    Object.entries(settings).some(([key, value]) => session[key] !== value)) return makeSession();
+  if (!session) return makeSession();
+  const previous = { ...session, iphoneCompatibility: Boolean(session.iphoneCompatibility) };
+  if (Object.entries(settings).some(([key, value]) => previous[key] !== value)) return makeSession();
   return session;
 }
 
@@ -353,7 +368,9 @@ function saveRun() {
 
 bind('start', () => {
   if (current?.state === 'preparing') current.abort('cancelled');
-  else if (active()) current.requestStop();
+  else if (active() && current.run.iphoneCompatibility) {
+    if (current.waitingForResult) current.abort('cancelled');
+  } else if (active()) current.requestStop();
   else startRun();
 });
 bind('transcript', () => {
