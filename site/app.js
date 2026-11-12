@@ -24,12 +24,6 @@ const device = {
 const ios = /iPhone|iPad|iPod/u.test(browser.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-const params = new URLSearchParams(location.search);
-const manualEndTest = params.get('manual-end') === '1';
-const iphoneCompatibilityAvailable = ios && !manualEndTest &&
-  Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
-const muteStartupAudio = params.get('startup-audio') === 'muted';
-
 const STORAGE = 'order-signal-v1';
 let storageError = false;
 function readStorage() {
@@ -148,6 +142,7 @@ function accuracyView(run, showTranscripts = true) {
 
 function inputName(run) {
   const label = inputLabels[run.method];
+  if (run.manualEnd) return label + ' · Manual end';
   if (run.manualEndTest) return label + ' · Manual end test';
   if (run.iphoneCompatibility) return label + ' · Automatic end on iPhone';
   return label;
@@ -202,8 +197,6 @@ function renderCase() {
 
 function renderMethod() {
   const method = $('method').value;
-  $('iphone-help').hidden = !iphoneCompatibilityAvailable || method !== 'live';
-  $('manual-end-help').hidden = !manualEndTest || method !== 'live';
   $('audio-area').hidden = method === 'live';
   $('file-label').hidden = method !== 'track';
   $('preview').hidden = method !== 'track' || !file;
@@ -246,17 +239,14 @@ function renderRun() {
   if (status.textContent !== statuses[state]) status.textContent = statuses[state];
   status.dataset.state = state;
   const error = run?.errors.at(-1)?.message || (ready && run.termination === 'page-hidden' ? 'Recognition stopped when the page was hidden.' :
-    ready && run.manualEndTest && run.termination === 'browser' ? 'The browser ended recognition before you tapped End.' :
+    ready && run.manualEnd && run.termination === 'browser' ? 'The browser ended recognition before you tapped End.' :
     ready && !run.transcripts.final.trim() ? 'No final transcript was returned.' :
     !window.isSecureContext ? 'Recognition requires HTTPS or localhost.' :
     !Recognition ? 'This browser does not expose the speech recognition API.' : '');
   if ($('error').textContent !== error) $('error').textContent = error;
   $('error').hidden = !error;
-  const compatibility = Boolean(run?.iphoneCompatibility);
   const captureHint = current?.waitingForResult
-    ? compatibility
-      ? 'The browser has not ended the run yet. If it is stuck, cancel the run and reopen the browser.'
-      : 'No transcription yet. If you are already speaking, end the run and try again.'
+    ? 'No transcription yet. If you are already speaking, end the run and try again.'
     : ios && ready && !run.transcripts.full.trim() &&
       run.events.some(event => event.name === 'onstart') &&
       !run.errors.some(item => ['not-allowed', 'service-not-allowed', 'network'].includes(item.code))
@@ -264,16 +254,9 @@ function renderRun() {
       : '';
   $('capture-hint').textContent = captureHint;
   $('capture-hint').hidden = !captureHint;
-  const labels = compatibility
-    ? {
-        preparing: 'Cancel', starting: 'Starting…',
-        listening: current.waitingForResult ? 'Cancel stalled run' : 'Ends automatically', stopping: 'Finishing…'
-      }
-    : { preparing: 'Cancel audio setup', starting: 'End recognition', listening: 'End recognition', stopping: 'Finishing…' };
+  const labels = { preparing: 'Cancel audio setup', starting: 'End recognition', listening: 'End recognition', stopping: 'Finishing…' };
   $('start-label').textContent = labels[state] ?? (method === 'track' ? 'Test audio file' : 'Start recognition');
-  $('start').disabled = busy
-    ? state === 'stopping' || (compatibility && state !== 'preparing' && !current.waitingForResult)
-    : !canStart;
+  $('start').disabled = busy ? state === 'stopping' : !canStart;
   for (const id of ['language', 'method', 'case-select', 'mode', 'fillers', 'audio-file', 'next', 'repeat', 'mixed-case', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
   renderSave();
   for (const id of ['run-json', 'run-csv', 'event-json', 'event-csv']) $(id).disabled = !ready;
@@ -285,12 +268,7 @@ function renderRun() {
   $('latencies').replaceChildren(...Object.entries(browserLatencyLabels).map(([key, label]) => metric(label, ms(run?.latency[key]))));
   const events = run?.events ?? [];
   $('event-count').textContent = '(' + events.length + ')';
-  const eventLabels = {
-    readyPromptRequested: 'Startup audio requested',
-    readyPromptEnd: 'Startup audio finished',
-    readyPromptError: 'Startup audio failed'
-  };
-  $('events').replaceChildren(...events.map(event => el('li', ms(event.ms) + ' · ' + (eventLabels[event.name] ?? event.name) +
+  $('events').replaceChildren(...events.map(event => el('li', ms(event.ms) + ' · ' + event.name +
     (event.code ? ' · ' + event.code : '') + (event.newFinal ? ' · new final' : ''))));
   if (ready || state === 'idle' || state === 'preparing') $('accuracy').replaceChildren(accuracyView(ready ? run : null));
   const sequence = queueIds();
@@ -325,14 +303,14 @@ function queueIds() {
   const chosen = (session?.queue ?? []).filter(id => cases.some(item => item.id === id));
   return chosen.length ? chosen : cases.map(item => item.id);
 }
-const configuration = () => ({
-  language: $('language').value, method: $('method').value,
-  manualEndTest: manualEndTest && $('method').value === 'live',
-  iosAudioSessionTest: ios && manualEndTest && $('method').value === 'live',
-  iphoneCompatibility: iphoneCompatibilityAvailable && $('method').value === 'live',
-  mutedStartupAudio: muteStartupAudio && iphoneCompatibilityAvailable && $('method').value === 'live',
-  network: $('network').value.trim(), environment: $('environment').value
-});
+const configuration = () => {
+  const method = $('method').value;
+  return {
+    language: $('language').value, method,
+    manualEnd: method === 'live', iosAudioSessionTest: ios && method === 'live',
+    network: $('network').value.trim(), environment: $('environment').value
+  };
+};
 
 function makeSession() {
   session = {
@@ -347,10 +325,8 @@ function sessionForRun() {
   if (!session) return makeSession();
   const previous = {
     ...session,
-    manualEndTest: Boolean(session.manualEndTest),
-    iosAudioSessionTest: Boolean(session.iosAudioSessionTest),
-    iphoneCompatibility: Boolean(session.iphoneCompatibility),
-    mutedStartupAudio: Boolean(session.mutedStartupAudio)
+    manualEnd: Boolean(session.manualEnd),
+    iosAudioSessionTest: Boolean(session.iosAudioSessionTest)
   };
   if (Object.entries(settings).some(([key, value]) => previous[key] !== value)) return makeSession();
   return session;
@@ -373,7 +349,7 @@ function startRun() {
     if (current?.run !== run) return;
     if (current.state === 'finished') {
       run.success = Boolean(run.transcripts.final.trim()) && !run.errors.length &&
-        (run.manualEndTest ? run.termination === 'manual' && run.events.some(event => event.name === 'onend')
+        (run.manualEnd ? run.termination === 'manual' && run.events.some(event => event.name === 'onend')
           : ['manual', 'browser', 'audio-ended'].includes(run.termination));
       run.evaluation = score(run.reference, run.transcripts.final, run.criticalTerms, run.scoring);
     }
@@ -403,9 +379,7 @@ function saveRun() {
 
 bind('start', () => {
   if (current?.state === 'preparing') current.abort('cancelled');
-  else if (active() && current.run.iphoneCompatibility) {
-    if (current.waitingForResult) current.abort('cancelled');
-  } else if (active()) current.requestStop();
+  else if (active()) current.requestStop();
   else startRun();
 });
 bind('transcript', () => {
@@ -487,7 +461,7 @@ $('support-info').replaceWith(detailsList([
 
 if (session) {
   $('language').value = session.language;
-  if (!manualEndTest && ['external', 'track'].includes(session.method)) $('method').value = session.method;
+  if (['external', 'track'].includes(session.method)) $('method').value = session.method;
   $('network').value = session.network;
   $('environment').value = session.environment;
 }
