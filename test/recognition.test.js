@@ -166,37 +166,49 @@ test('A delayed end event triggers abort and still records the real end', async 
   assert.ok(capture.run.latency.stopToEnd >= 0);
 });
 
-test('iPhone manual End reapplies audio routing after the browser ends', async t => {
-  const changes = [];
-  const audioSession = {
-    get type() { return changes.at(-1) ?? 'auto'; },
-    set type(value) { changes.push(value); }
+test('iPhone waits for its short cue and supports consecutive browser-ended rounds', async t => {
+  let cue;
+  let recognitionStarts = 0;
+  const previousWindow = globalThis.window;
+  globalThis.window = {
+    SpeechSynthesisUtterance: class {
+      constructor(value) { this.text = value; }
+    },
+    speechSynthesis: {
+      speak(utterance) { cue = utterance; },
+      cancel() { assert.fail('A completed cue should not be cancelled'); }
+    }
   };
-  const navigatorProperty = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
-  Object.defineProperty(globalThis, 'navigator', { value: { audioSession }, configurable: true });
-  t.after(() => {
-    if (navigatorProperty) Object.defineProperty(globalThis, 'navigator', navigatorProperty);
-    else delete globalThis.navigator;
-  });
+  t.after(() => { globalThis.window = previousWindow; });
 
-  class DelayedEnd extends FakeRecognition {
-    stop() {}
+  class SingleUtterance extends FakeRecognition {
+    start() {
+      assert.equal(this.continuous, false);
+      recognitionStarts++;
+      super.start();
+    }
+    stop() { assert.fail('iPhone recognition must end naturally'); }
   }
 
-  const capture = makeRun(DelayedEnd);
-  capture.run.iosAudioSessionTest = true;
-  await capture.start();
-  assert.equal(capture.recognition.continuous, true);
-  capture.requestStop();
-  assert.deepEqual(changes, []);
-  capture.recognition.onend();
-  assert.deepEqual(changes, ['playback', 'auto']);
-  assert.equal(capture.run.events.at(-1).name, 'audioSessionReset');
-  assert.equal(capture.state, 'finished');
-
-  const next = makeRun();
-  next.run.iosAudioSessionTest = true;
-  await next.start();
-  next.recognition.onend();
-  assert.deepEqual(changes, ['playback', 'auto']);
+  for (const [index, text] of ['one coffee', 'and a burger'].entries()) {
+    const capture = makeRun(SingleUtterance);
+    capture.run.iphoneCompatibility = true;
+    const starting = capture.start();
+    assert.equal(recognitionStarts, index);
+    assert.equal(cue.text, '1');
+    assert.ok(cue.volume > 0 && cue.volume < 0.2);
+    cue.onend();
+    await starting;
+    assert.equal(recognitionStarts, index + 1);
+    capture.requestStop();
+    capture.recognition.onresult({
+      resultIndex: 0,
+      results: [Object.assign([{ transcript: text }], { isFinal: true })]
+    });
+    capture.recognition.onend();
+    assert.equal(capture.run.transcripts.final, text);
+    assert.equal(capture.run.termination, 'browser');
+    assert.deepEqual(capture.run.events.map(event => event.name),
+      ['startupAudioRequested', 'startupAudioEnd', 'start()', 'onstart', 'onresult', 'onend']);
+  }
 });

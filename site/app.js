@@ -1,5 +1,5 @@
 import { builtInCases, mixedCases, parseDataset } from './dataset.js';
-import { aggregate, csv, groupMetrics, json, browserLatencyLabels, latencyLabels, recordingLatencyLabels, score } from './benchmark.js';
+import { aggregate, csv, groupMetrics, joinRaw, json, browserLatencyLabels, latencyLabels, recordingLatencyLabels, score } from './benchmark.js';
 import { audioTrackCandidate, inputLabels, RecognitionRun } from './recognition.js';
 
 const $ = id => document.getElementById(id);
@@ -36,6 +36,7 @@ const sessions = stored.sessions ?? [];
 let session = sessions.at(-1) ?? null;
 let caseId = cases[0].id;
 let current = null;
+let transcriptPrefix = '';
 let file = null;
 let previewUrl = '';
 let noticeTimer;
@@ -197,6 +198,10 @@ function renderCase() {
 
 function renderMethod() {
   const method = $('method').value;
+  $('transcript-help').textContent = method === 'live'
+    ? (ios ? 'Wait for Listening, then speak. Pause to finish. Tap Start again to add more text.'
+      : 'Text appears as you speak. Tap Start again to add more after a round ends.')
+    : 'Text appears as recognition runs. Edit it here after recognition ends.';
   $('audio-area').hidden = method === 'live';
   $('file-label').hidden = method !== 'track';
   $('preview').hidden = method !== 'track' || !file;
@@ -215,9 +220,7 @@ function renderSave() {
 }
 
 function canReset() {
-  return current?.state === 'finished' && Boolean(
-    current.run.transcripts.final.trim() && $('transcript').value.trim()
-  );
+  return current?.state === 'finished' && Boolean($('transcript').value.trim());
 }
 
 function renderRun() {
@@ -227,10 +230,11 @@ function renderRun() {
   const method = $('method').value;
   const canStart = Recognition && window.isSecureContext && (method !== 'track' || (trackAvailable && file));
   const state = current?.state ?? 'idle';
+  const autoEnd = Boolean(run?.iphoneCompatibility);
   const statuses = {
     idle: Recognition ? 'Idle' : 'API unavailable',
-    preparing: method === 'track' ? 'Preparing audio' : 'Starting…',
-    starting: 'Starting…',
+    preparing: autoEnd ? 'Idle' : 'Preparing audio',
+    starting: autoEnd ? 'Idle' : 'Starting…',
     listening: 'Listening',
     stopping: 'Finishing',
     finished: run?.success ? 'Complete' : 'Unsuccessful'
@@ -246,7 +250,8 @@ function renderRun() {
   if ($('error').textContent !== error) $('error').textContent = error;
   $('error').hidden = !error;
   const captureHint = current?.waitingForResult
-    ? 'No transcription yet. If you are already speaking, end the run and try again.'
+    ? (autoEnd ? 'No transcription yet. Wait for this round to finish before trying again.'
+      : 'No transcription yet. If you are already speaking, end the run and try again.')
     : ios && ready && !run.transcripts.full.trim() &&
       run.events.some(event => event.name === 'onstart') &&
       !run.errors.some(item => ['not-allowed', 'service-not-allowed', 'network'].includes(item.code))
@@ -255,18 +260,23 @@ function renderRun() {
   $('capture-hint').textContent = captureHint;
   $('capture-hint').hidden = !captureHint;
   const labels = { preparing: 'Cancel audio setup', starting: 'End recognition', listening: 'End recognition', stopping: 'Finishing…' };
-  $('start-label').textContent = labels[state] ?? (method === 'track' ? 'Test audio file' : 'Start recognition');
-  $('start').disabled = busy ? state === 'stopping' : !canStart;
+  const startLabel = method === 'track' ? 'Test audio file' : 'Start recognition';
+  $('start-label').textContent = autoEnd && busy
+    ? (state === 'listening' ? 'Listening…' : startLabel)
+    : (labels[state] ?? startLabel);
+  $('start').disabled = busy ? autoEnd || state === 'stopping' : !canStart;
   for (const id of ['language', 'method', 'case-select', 'mode', 'fillers', 'audio-file', 'next', 'repeat', 'mixed-case', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
   renderSave();
   for (const id of ['run-json', 'run-csv', 'event-json', 'event-csv']) $(id).disabled = !ready;
   const transcript = $('transcript');
   transcript.readOnly = !ready;
-  const value = ready ? (run.editedTranscript ?? run.transcripts.final) : (run?.transcripts?.full ?? '');
+  const value = ready
+    ? (run.editedTranscript ?? run.combinedTranscript ?? run.transcripts.final)
+    : joinRaw(transcriptPrefix, run?.transcripts?.full ?? '');
   if (transcript.value !== value) transcript.value = value;
   $('reset').disabled = !canReset();
   $('latencies').replaceChildren(...Object.entries(browserLatencyLabels).map(([key, label]) => metric(label, ms(run?.latency[key]))));
-  const events = run?.events ?? [];
+  const events = (run?.events ?? []).filter(event => !event.name.startsWith('startupAudio'));
   $('event-count').textContent = '(' + events.length + ')';
   $('events').replaceChildren(...events.map(event => el('li', ms(event.ms) + ' · ' + event.name +
     (event.code ? ' · ' + event.code : '') + (event.newFinal ? ' · new final' : ''))));
@@ -288,6 +298,7 @@ function fillCaseOptions(queue = []) {
 function clearRun() {
   if (active()) return;
   current = null;
+  transcriptPrefix = '';
   renderRun();
 }
 
@@ -307,7 +318,8 @@ const configuration = () => {
   const method = $('method').value;
   return {
     language: $('language').value, method,
-    manualEnd: method === 'live', iosAudioSessionTest: ios && method === 'live',
+    manualEnd: method === 'live' && !ios,
+    iphoneCompatibility: ios && method === 'live',
     network: $('network').value.trim(), environment: $('environment').value
   };
 };
@@ -326,7 +338,7 @@ function sessionForRun() {
   const previous = {
     ...session,
     manualEnd: Boolean(session.manualEnd),
-    iosAudioSessionTest: Boolean(session.iosAudioSessionTest)
+    iphoneCompatibility: Boolean(session.iphoneCompatibility)
   };
   if (Object.entries(settings).some(([key, value]) => previous[key] !== value)) return makeSession();
   return session;
@@ -336,18 +348,23 @@ function startRun() {
   if (active() || $('start').disabled) return;
   if (!$('preview').paused) $('preview').pause();
   const item = selectedCase();
+  const settings = configuration();
+  const previous = current?.run;
+  transcriptPrefix = settings.method === 'live' && previous?.method === 'live' && previous.caseId === caseId
+    ? $('transcript').value : '';
   const parent = sessionForRun();
   const run = {
     id: uuid(), sessionId: parent.id, startedAt: new Date().toISOString(),
     caseId, category: item.category, reference: item.reference, criticalTerms: [...item.criticalTerms],
     notes: item.notes, audioReference: item.audio, fileName: parent.method === 'track' ? file.name : null,
-    browser, device, ...configuration(), interim: true,
+    browser, device, ...settings, interim: true,
     scoring: { mode: $('mode').value, fillers: $('fillers').value.split(',').map(value => value.trim()).filter(Boolean) },
     events: [], errors: [], manualStop: false, termination: null
   };
   current = new RecognitionRun(Recognition, run, () => {
     if (current?.run !== run) return;
     if (current.state === 'finished') {
+      if (transcriptPrefix) run.combinedTranscript = joinRaw(transcriptPrefix, run.transcripts.final);
       run.success = Boolean(run.transcripts.final.trim()) && !run.errors.length &&
         (run.manualEnd ? run.termination === 'manual' && run.events.some(event => event.name === 'onend')
           : ['manual', 'browser', 'audio-ended'].includes(run.termination));
@@ -386,7 +403,7 @@ bind('transcript', () => {
   if (current?.state !== 'finished') return;
   const { run } = current;
   const value = $('transcript').value;
-  run.editedTranscript = value === run.transcripts.final ? undefined : value;
+  run.editedTranscript = value === (run.combinedTranscript ?? run.transcripts.final) ? undefined : value;
   $('reset').disabled = !canReset();
   renderSave();
 }, 'input');

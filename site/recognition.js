@@ -59,7 +59,7 @@ export class RecognitionRun {
       const recognition = this.recognition = new this.Recognition();
       recognition.lang = this.run.language;
       recognition.interimResults = this.run.interim;
-      recognition.continuous = true;
+      recognition.continuous = !this.run.iphoneCompatibility;
 
       for (const name of ['audiostart', 'soundstart', 'speechstart', 'speechend', 'soundend', 'audioend']) {
         recognition['on' + name] = () => {
@@ -112,7 +112,6 @@ export class RecognitionRun {
       recognition.onend = () => {
         if (this.state === 'finished') return;
         this.log('onend');
-        if (this.run.iosAudioSessionTest && this.run.manualStop && !this.closing) this.resetAudioSession();
         this.finish(this.run.termination ?? 'browser');
       };
 
@@ -123,6 +122,12 @@ export class RecognitionRun {
         if (this.state !== 'preparing') return;
         clearTimeout(this.deadline);
         if (track.readyState !== 'live' || track.kind !== 'audio') throw new Error('An active audio track is required.');
+      }
+      if (this.run.iphoneCompatibility && window.speechSynthesis && window.SpeechSynthesisUtterance) {
+        this.deadline = setTimeout(() => this.timeout('Could not start listening. Tap Start to try again.'), 5000);
+        await this.playStartupAudio();
+        if (this.state !== 'preparing') return;
+        clearTimeout(this.deadline);
       }
       this.state = 'starting';
       this.deadline = setTimeout(() => this.timeout('The browser did not confirm recognition start.'), 30000);
@@ -140,20 +145,39 @@ export class RecognitionRun {
     }
   }
 
-  resetAudioSession() {
-    const session = globalThis.navigator?.audioSession;
-    if (!session || session.type !== 'auto') {
-      this.log('audioSessionResetSkipped', { type: session?.type ?? null });
-      return;
-    }
-    // Test whether reapplying the default audio routing helps the next iOS recognition session.
-    try {
-      session.type = 'playback';
-      session.type = 'auto';
-      this.log('audioSessionReset');
-    } catch (error) {
-      this.log('audioSessionResetError', { message: error.message });
-    }
+  playStartupAudio() {
+    const { speechSynthesis, SpeechSynthesisUtterance } = window;
+    return new Promise(resolve => {
+      const utterance = new SpeechSynthesisUtterance('1');
+      utterance.lang = this.run.language;
+      utterance.rate = 1.4;
+      utterance.volume = 0.08;
+      const settle = () => {
+        utterance.onend = null;
+        utterance.onerror = null;
+        this.cancelStartupAudio = null;
+        resolve();
+      };
+      this.cancelStartupAudio = () => {
+        settle();
+        speechSynthesis.cancel();
+      };
+      utterance.onend = () => {
+        this.log('startupAudioEnd');
+        settle();
+      };
+      utterance.onerror = event => {
+        this.log('startupAudioError', { code: event.error });
+        settle();
+      };
+      this.log('startupAudioRequested');
+      try {
+        speechSynthesis.speak(utterance);
+      } catch (error) {
+        this.log('startupAudioError', { message: error.message });
+        settle();
+      }
+    });
   }
 
   async prepareTrack(file) {
@@ -213,7 +237,7 @@ export class RecognitionRun {
   }
 
   requestStop(reason = 'manual') {
-    if (!['starting', 'listening'].includes(this.state)) return;
+    if (this.run.iphoneCompatibility || !['starting', 'listening'].includes(this.state)) return;
     this.run.termination = reason;
     this.run.manualStop = reason === 'manual';
     this.state = 'stopping';
@@ -271,6 +295,7 @@ export class RecognitionRun {
     this.state = 'finished';
     this.run.termination = reason;
     this.run.finishedAt = new Date().toISOString();
+    this.cancelStartupAudio?.();
     this.stopAudio();
     if (this.recognition) {
       for (const event of ['start', 'audiostart', 'soundstart', 'speechstart', 'result', 'speechend', 'soundend', 'audioend', 'error', 'end']) {

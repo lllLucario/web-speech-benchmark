@@ -15,12 +15,12 @@ With Node 20 or newer, run `npm run dev` and open the printed localhost URL. Run
 1. Open the deployed HTTPS URL in iOS Safari or Android Chrome. Record the browser and device details shown in the support section.
 2. Select a prompt, language, and input method. Tap **Start recognition**, grant the browser's permission, and wait for **Listening**.
 3. Read the order aloud or play a corresponding recording from another device using **External audio playback**.
-4. Tap **End recognition** on the same button when you are done speaking. Edit the text in **Transcript** after recognition ends. Review timing, error rates, and alignment under the benchmark results.
-5. Save the run and export JSON or CSV. To check the restart flow, start another run, end it, wait for the transcript, then tap **Reset** and start again. Reset is available when recognition has ended and the transcript contains recognized text. You can also start another run directly. Repeat on both Safari and Chrome on iPhone. Repeat with permission denied and silence to check failure handling.
+4. On iPhone in **Live speech**, pause to finish. On other devices, tap **End recognition** on the same button when you are done speaking. Edit the text in **Transcript** after recognition ends. Review timing, error rates, and alignment under the benchmark results.
+5. Tap **Start recognition** again on the same prompt to append the next round to the text box, or tap **Reset** to clear it. Save or export each round for its individual timings and score. Repeat on both Safari and Chrome on iPhone. Also check permission denial and silence.
 
 Constructor detection indicates API presence. Recognition may depend on browser permissions, device configuration, connectivity and the browser's own speech service. AudioTrack is restricted to eligible desktop Chrome configurations. A file is decoded in Web Audio and routed through a media destination to `start(track)`. Verify the result against a known recording in a quiet room. Failures never retry through the microphone.
 
-Live speech requests continuous recognition and displays interim text as it arrives. If the browser ends before you tap End, the run is marked unsuccessful and the transcript stays available. On iPhone the page tries resetting the default audio routing after a manual end where the Audio Session API is available. If later runs produce no text, fully close and reopen the browser. [WebKit report on consecutive recognition sessions](https://bugs.webkit.org/show_bug.cgi?id=321436#c8)
+Live speech uses single-utterance recognition on iPhone. It waits for a short, low-volume speech synthesis cue before each start and lets the browser end the round. Other devices request continuous recognition. If later iPhone rounds produce no text, fully close and reopen the browser. [WebKit report on consecutive recognition sessions](https://bugs.webkit.org/show_bug.cgi?id=321436#c8)
 
 ## Dataset and batch workflow
 

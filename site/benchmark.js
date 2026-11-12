@@ -92,7 +92,7 @@ export function collectResults(previous, event) {
   return { slots, newFinal };
 }
 
-function joinRaw(text, segment) {
+export function joinRaw(text, segment) {
   if (!text || !segment || /\s$/u.test(text) || /^\s/u.test(segment)) return text + segment;
   return text + ' ' + segment;
 }
