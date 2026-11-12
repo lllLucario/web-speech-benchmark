@@ -59,7 +59,7 @@ export class RecognitionRun {
       const recognition = this.recognition = new this.Recognition();
       recognition.lang = this.run.language;
       recognition.interimResults = this.run.interim;
-      recognition.continuous = !this.run.iphoneCompatibility;
+      recognition.continuous = !this.run.autoEnd;
 
       for (const name of ['audiostart', 'soundstart', 'speechstart', 'speechend', 'soundend', 'audioend']) {
         recognition['on' + name] = () => {
@@ -124,7 +124,7 @@ export class RecognitionRun {
         if (track.readyState !== 'live' || track.kind !== 'audio') throw new Error('An active audio track is required.');
       }
       if (this.run.iphoneCompatibility && window.speechSynthesis && window.SpeechSynthesisUtterance) {
-        this.deadline = setTimeout(() => this.timeout('Could not start listening. Tap Start to try again.'), 5000);
+        this.deadline = setTimeout(() => this.timeout('Could not start listening. Tap Start to try again.'), 10000);
         await this.playStartupAudio();
         if (this.state !== 'preparing') return;
         clearTimeout(this.deadline);
@@ -147,35 +147,36 @@ export class RecognitionRun {
 
   playStartupAudio() {
     const { speechSynthesis, SpeechSynthesisUtterance } = window;
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
       const utterance = new SpeechSynthesisUtterance('1');
       utterance.lang = this.run.language;
-      utterance.rate = 1.4;
-      utterance.volume = 0.08;
-      const settle = () => {
+      const detach = () => {
         utterance.onend = null;
         utterance.onerror = null;
         this.cancelStartupAudio = null;
-        resolve();
       };
       this.cancelStartupAudio = () => {
-        settle();
+        detach();
         speechSynthesis.cancel();
+        resolve();
       };
       utterance.onend = () => {
+        detach();
         this.log('startupAudioEnd');
-        settle();
+        resolve();
       };
       utterance.onerror = event => {
+        detach();
         this.log('startupAudioError', { code: event.error });
-        settle();
+        reject(new Error('Could not start listening. Tap Start to try again.'));
       };
       this.log('startupAudioRequested');
       try {
         speechSynthesis.speak(utterance);
       } catch (error) {
+        detach();
         this.log('startupAudioError', { message: error.message });
-        settle();
+        reject(new Error('Could not start listening. Tap Start to try again.'));
       }
     });
   }
@@ -237,7 +238,7 @@ export class RecognitionRun {
   }
 
   requestStop(reason = 'manual') {
-    if (this.run.iphoneCompatibility || !['starting', 'listening'].includes(this.state)) return;
+    if (this.run.autoEnd || !['starting', 'listening'].includes(this.state)) return;
     this.run.termination = reason;
     this.run.manualStop = reason === 'manual';
     this.state = 'stopping';

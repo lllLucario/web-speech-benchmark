@@ -143,6 +143,7 @@ function accuracyView(run, showTranscripts = true) {
 
 function inputName(run) {
   const label = inputLabels[run.method];
+  if (run.autoEnd) return label + ' · Automatic end';
   if (run.manualEnd) return label + ' · Manual end';
   if (run.manualEndTest) return label + ' · Manual end test';
   if (run.iphoneCompatibility) return label + ' · Automatic end on iPhone';
@@ -199,8 +200,7 @@ function renderCase() {
 function renderMethod() {
   const method = $('method').value;
   $('transcript-help').textContent = method === 'live'
-    ? (ios ? 'Wait for Listening, then speak. Pause to finish. Tap Start again to add more text.'
-      : 'Text appears as you speak. Tap Start again to add more after a round ends.')
+    ? 'Wait for Listening, then speak. Pause to finish. Tap Start again to add more text.'
     : 'Text appears as recognition runs. Edit it here after recognition ends.';
   $('audio-area').hidden = method === 'live';
   $('file-label').hidden = method !== 'track';
@@ -230,11 +230,12 @@ function renderRun() {
   const method = $('method').value;
   const canStart = Recognition && window.isSecureContext && (method !== 'track' || (trackAvailable && file));
   const state = current?.state ?? 'idle';
-  const autoEnd = Boolean(run?.iphoneCompatibility);
+  const autoEnd = Boolean(run?.autoEnd);
+  const hasStartupCue = Boolean(run?.iphoneCompatibility);
   const statuses = {
     idle: Recognition ? 'Idle' : 'API unavailable',
-    preparing: autoEnd ? 'Idle' : 'Preparing audio',
-    starting: autoEnd ? 'Idle' : 'Starting…',
+    preparing: hasStartupCue ? 'Idle' : method === 'track' ? 'Preparing audio' : 'Starting…',
+    starting: hasStartupCue ? 'Idle' : 'Starting…',
     listening: 'Listening',
     stopping: 'Finishing',
     finished: run?.success ? 'Complete' : 'Unsuccessful'
@@ -243,7 +244,6 @@ function renderRun() {
   if (status.textContent !== statuses[state]) status.textContent = statuses[state];
   status.dataset.state = state;
   const error = run?.errors.at(-1)?.message || (ready && run.termination === 'page-hidden' ? 'Recognition stopped when the page was hidden.' :
-    ready && run.manualEnd && run.termination === 'browser' ? 'The browser ended recognition before you tapped End.' :
     ready && !run.transcripts.final.trim() ? 'No final transcript was returned.' :
     !window.isSecureContext ? 'Recognition requires HTTPS or localhost.' :
     !Recognition ? 'This browser does not expose the speech recognition API.' : '');
@@ -318,7 +318,7 @@ const configuration = () => {
   const method = $('method').value;
   return {
     language: $('language').value, method,
-    manualEnd: method === 'live' && !ios,
+    autoEnd: method === 'live',
     iphoneCompatibility: ios && method === 'live',
     network: $('network').value.trim(), environment: $('environment').value
   };
@@ -337,7 +337,7 @@ function sessionForRun() {
   if (!session) return makeSession();
   const previous = {
     ...session,
-    manualEnd: Boolean(session.manualEnd),
+    autoEnd: Boolean(session.autoEnd),
     iphoneCompatibility: Boolean(session.iphoneCompatibility)
   };
   if (Object.entries(settings).some(([key, value]) => previous[key] !== value)) return makeSession();
@@ -366,8 +366,7 @@ function startRun() {
     if (current.state === 'finished') {
       if (transcriptPrefix) run.combinedTranscript = joinRaw(transcriptPrefix, run.transcripts.final);
       run.success = Boolean(run.transcripts.final.trim()) && !run.errors.length &&
-        (run.manualEnd ? run.termination === 'manual' && run.events.some(event => event.name === 'onend')
-          : ['manual', 'browser', 'audio-ended'].includes(run.termination));
+        ['manual', 'browser', 'audio-ended'].includes(run.termination);
       run.evaluation = score(run.reference, run.transcripts.final, run.criticalTerms, run.scoring);
     }
     renderRun();

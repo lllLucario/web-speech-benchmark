@@ -192,11 +192,11 @@ test('iPhone waits for its short cue and supports consecutive browser-ended roun
 
   for (const [index, text] of ['one coffee', 'and a burger'].entries()) {
     const capture = makeRun(SingleUtterance);
+    capture.run.autoEnd = true;
     capture.run.iphoneCompatibility = true;
     const starting = capture.start();
     assert.equal(recognitionStarts, index);
     assert.equal(cue.text, '1');
-    assert.ok(cue.volume > 0 && cue.volume < 0.2);
     cue.onend();
     await starting;
     assert.equal(recognitionStarts, index + 1);
@@ -211,4 +211,16 @@ test('iPhone waits for its short cue and supports consecutive browser-ended roun
     assert.deepEqual(capture.run.events.map(event => event.name),
       ['startupAudioRequested', 'startupAudioEnd', 'start()', 'onstart', 'onresult', 'onend']);
   }
+});
+
+test('live speech can end naturally without an iPhone startup cue', async () => {
+  const capture = makeRun();
+  capture.run.autoEnd = true;
+  await capture.start();
+  assert.equal(capture.recognition.continuous, false);
+  capture.requestStop();
+  assert.equal(capture.state, 'listening');
+  capture.recognition.onend();
+  assert.equal(capture.run.termination, 'browser');
+  assert.equal(capture.run.events.some(event => event.name === 'stop()'), false);
 });
