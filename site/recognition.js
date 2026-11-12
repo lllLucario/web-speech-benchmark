@@ -1,7 +1,7 @@
 import { collectResults, timings, transcripts } from './benchmark.js';
 
 export const inputLabels = {
-  recorded: 'Live speech · on-device transcription',
+  recorded: 'Manual recording · on-device transcription',
   live: 'Browser speech',
   external: 'External audio playback',
   track: 'AudioTrack'

@@ -6,7 +6,8 @@ import { RecordedSpeechRun, supportsRecordedSpeech } from './recorded-speech.js'
 const $ = id => document.getElementById(id);
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const trackAvailable = audioTrackCandidate();
-const recordingAvailable = supportsRecordedSpeech();
+const recordingOption = $('method').querySelector('[value=recorded]');
+const recordingAvailable = Boolean(recordingOption) && supportsRecordedSpeech();
 const browser = {
   name: navigator.userAgent.match(/Edg(?:A|iOS)?\//u) ? 'Edge' :
     /(?:Chrome|CriOS)\//u.test(navigator.userAgent) ? 'Chrome' :
@@ -249,7 +250,7 @@ function renderRun() {
   if ($('error').textContent !== error) $('error').textContent = error;
   $('error').hidden = !error;
   $('transcript-help').textContent = recorded
-    ? 'Tap End to transcribe. The first run downloads the speech model.'
+    ? 'Tap End to transcribe. The first run downloads about 58 MB of model and runtime files.'
     : 'Text appears as you speak. Edit it here after recognition ends.';
   const compatibility = Boolean(run?.iphoneCompatibility);
   const captureHint = current?.waitingForResult
@@ -478,7 +479,7 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => current?.abort('page-hidden'));
 $('support-info').replaceWith(detailsList([
-  ['On-device recording', recordingAvailable ? 'Available' : 'Unavailable'],
+  ...(recordingOption ? [['On-device recording', recordingAvailable ? 'Available' : 'Unavailable']] : []),
   ['Recognition API', Recognition ? (window.SpeechRecognition ? 'Standard constructor detected' : 'Prefixed constructor detected') : 'Unavailable'],
   ['Secure context', window.isSecureContext ? 'Yes' : 'No'],
   ['AudioTrack candidate', trackAvailable ? 'Eligible · actual recognition unverified' : 'Unavailable in this configuration'],
@@ -487,9 +488,10 @@ $('support-info').replaceWith(detailsList([
   ['User agent', browser.userAgent]
 ]));
 
+$('method').value = 'live';
 if (session) {
   $('language').value = session.language;
-  if (session.method !== 'live') $('method').value = session.method;
+  if (['external', 'track'].includes(session.method)) $('method').value = session.method;
   $('network').value = session.network;
   $('environment').value = session.environment;
 }

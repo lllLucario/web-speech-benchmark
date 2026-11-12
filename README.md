@@ -1,10 +1,10 @@
 # Order Signal
 
-A static speech benchmark for English and Mandarin–English restaurant orders. Live speech records in the browser and transcribes on the device with Whisper tiny. Browser speech benchmarks the native Web Speech API.
+A static speech benchmark for English and Mandarin–English restaurant orders. Live speech uses the native Web Speech API and updates the transcript while you speak. The public build does not bundle a speech model.
 
 ## Run locally
 
-With Node 20 or newer and curl, run `npm ci --ignore-scripts`, then `npm run dev` and open the printed localhost URL. The build downloads the fixed model files into a local cache and serves them with the site. Run `npm run check`, `npm test`, and `npm run build` for validation. The production artifact is `dist/`. `npm run preview` serves that artifact. Assets are relative to the page, including under `/web-speech-benchmark/`.
+With Node 20 or newer, run `npm run dev` and open the printed localhost URL. The default build requires no model download. Run `npm run check`, `npm test`, and `npm run build` for validation. The production artifact is `dist/`. `npm run preview` serves that artifact. Assets are relative to the page, including under `/web-speech-benchmark/`.
 
 ## Live site
 
@@ -13,14 +13,13 @@ With Node 20 or newer and curl, run `npm ci --ignore-scripts`, then `npm run dev
 ## Test on a phone
 
 1. Open the deployed HTTPS URL in iOS Safari or Android Chrome. Record the browser and device details shown in the support section.
-2. In **Live speech**, select a prompt and language, then tap **Start** and grant microphone access.
-3. Wait for **Recording**. Read the order aloud, with pauses if needed, and tap **End** when finished.
-4. Wait for the transcript. The first run downloads roughly 58 MB of model and runtime files from this site. The recording is processed on the device.
-5. Edit the transcript or save the run. Tap **Start** again and repeat at least twice. Also check a 20-second order with a pause in the middle, a denied microphone request, and an interrupted recording.
+2. In **Live speech (Web Speech API)**, select a prompt and language, tap **Start recognition**, and grant microphone access.
+3. Wait for **Listening** and read the order aloud. Text updates during speech. Tap **End recognition** if available; on iPhone the browser can end automatically at a pause.
+4. Edit the transcript or save the run. Tap **Start recognition** again and repeat at least twice. Also check a 20-second order with a pause in the middle, a denied microphone request, and an interrupted recording.
 
 Constructor detection indicates API presence. Recognition may depend on browser permissions, device configuration, connectivity and the browser's own speech service. AudioTrack is restricted to eligible desktop Chrome configurations. A file is decoded in Web Audio and routed through a media destination to `start(track)`. Verify the result against a known recording in a quiet room. Failures never retry through the microphone.
 
-If iPhone recognition stops returning text after the first run, fully close and reopen the browser. In **Browser speech**, iPhone uses single-utterance recognition automatically when speech synthesis is available. Tap Start, wait for the spoken prompt and Listening, say one order, and pause for the browser to end the run. The ready prompt is logged separately from the recognition start timing. [WebKit reproduction and workaround](https://bugs.webkit.org/show_bug.cgi?id=321436#c9)
+If iPhone recognition stops returning text after the first run, fully close and reopen the browser. In **Live speech**, iPhone uses single-utterance recognition automatically when speech synthesis is available. Tap Start, wait for the spoken prompt and Listening, say one order, and pause for the browser to end the run. The ready prompt is logged separately from the recognition start timing. [WebKit reproduction and workaround](https://bugs.webkit.org/show_bug.cgi?id=321436#c9)
 
 ## Dataset and batch workflow
 
@@ -32,7 +31,7 @@ Open **Results** to select a session, review saved runs and compare sessions. Ex
 
 ## Measurements
 
-Event offsets use `performance.now()` from the start of the attempt. Live speech reports the time from Start to recording and from End to the final transcript. Its first run can include model loading time. Measurements are differences between observed browser events, and speech boundaries are approximate. Missing events and reversed intervals produce N/A. The end-of-speech metrics use the last speech-end event and, for final-result latency, the first new final result after it.
+Event offsets use `performance.now()` from the start of the attempt. The local recording experiment reports the time from Start to recording and from End to the final transcript. Its first run can include model loading time. Measurements are differences between observed browser events, and speech boundaries are approximate. Missing events and reversed intervals produce N/A. The end-of-speech metrics use the last speech-end event and, for final-result latency, the first new final result after it.
 
 For references containing Han characters, the benchmark uses mixed error rate (MER). Each Han character and English word counts as one token. MER uses the same edit-distance formula over those tokens and is reported separately from WER. The scorer keeps simplified and traditional forms distinct and never translates a transcript. [MER definition](https://dihana.cps.unizar.es/proceedings/ICASSP/2012/pdfs/0004889.pdf)
 
@@ -51,4 +50,4 @@ Syntax checks, deterministic unit tests and the production build run in CI. Actu
 
 References: [SpeechRecognition.start()](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition/start), [browser compatibility data](https://github.com/mdn/browser-compat-data/blob/main/api/SpeechRecognition.json), [GitHub Pages workflow documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
 
-Live speech uses [Transformers.js](https://github.com/huggingface/transformers.js), [ONNX Runtime](https://github.com/microsoft/onnxruntime) and [quantized Whisper tiny weights](https://huggingface.co/onnx-community/whisper-tiny). The build includes the upstream license notices.
+The local recording experiment is available by running `npm ci --ignore-scripts` and `ORDER_SIGNAL_LOCAL_MODEL=1 npm run dev` with curl installed. Select **Manual recording** in that build to record until End and transcribe on the device. The first attempt downloads about 58 MB. It uses [Transformers.js](https://github.com/huggingface/transformers.js), [ONNX Runtime](https://github.com/microsoft/onnxruntime) and [quantized Whisper tiny weights](https://huggingface.co/onnx-community/whisper-tiny). The build includes the upstream license notices.
