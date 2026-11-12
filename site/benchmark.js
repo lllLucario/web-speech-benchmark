@@ -102,7 +102,7 @@ export function transcripts(slots) {
   return { final: combine(slot => slot.isFinal), interim: combine(slot => !slot.isFinal), full: combine(() => true) };
 }
 
-export const latencyLabels = {
+export const browserLatencyLabels = {
   startup: 'Start request → recognition start',
   firstResult: 'Start request → first result',
   speechToResult: 'Speech start → first result',
@@ -110,6 +110,13 @@ export const latencyLabels = {
   speechToEnd: 'Speech end → recognition end',
   stopToEnd: 'Manual stop → recognition end'
 };
+
+export const recordingLatencyLabels = {
+  recordingStartup: 'Start request → recording start',
+  endToTranscript: 'End request → final transcript'
+};
+
+export const latencyLabels = { ...browserLatencyLabels, ...recordingLatencyLabels };
 
 export function timings(events) {
   const first = (name, predicate = () => true) =>

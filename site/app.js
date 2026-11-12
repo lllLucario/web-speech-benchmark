@@ -1,10 +1,12 @@
 import { builtInCases, mixedCases, parseDataset } from './dataset.js';
-import { aggregate, csv, groupMetrics, json, latencyLabels, score } from './benchmark.js';
+import { aggregate, browserLatencyLabels, csv, groupMetrics, json, latencyLabels, recordingLatencyLabels, score } from './benchmark.js';
 import { audioTrackCandidate, inputLabels, RecognitionRun } from './recognition.js';
+import { RecordedSpeechRun, supportsRecordedSpeech } from './recorded-speech.js';
 
 const $ = id => document.getElementById(id);
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const trackAvailable = audioTrackCandidate();
+const recordingAvailable = supportsRecordedSpeech();
 const browser = {
   name: navigator.userAgent.match(/Edg(?:A|iOS)?\//u) ? 'Edge' :
     /(?:Chrome|CriOS)\//u.test(navigator.userAgent) ? 'Chrome' :
@@ -194,7 +196,7 @@ function renderCase() {
 function renderMethod() {
   const method = $('method').value;
   $('iphone-help').hidden = !iphoneCompatibilityAvailable || method !== 'live';
-  $('audio-area').hidden = method === 'live';
+  $('audio-area').hidden = method !== 'external' && method !== 'track';
   $('file-label').hidden = method !== 'track';
   $('preview').hidden = method !== 'track' || !file;
   $('method-help').textContent = method === 'external'
@@ -222,14 +224,18 @@ function renderRun() {
   const busy = active();
   const ready = current?.state === 'finished';
   const method = $('method').value;
-  const canStart = Recognition && window.isSecureContext && (method !== 'track' || (trackAvailable && file));
+  const recorded = method === 'recorded';
+  const supported = recorded ? recordingAvailable : Boolean(Recognition);
+  const canStart = supported && window.isSecureContext && (method !== 'track' || (trackAvailable && file));
   const state = current?.state ?? 'idle';
   const statuses = {
-    idle: Recognition ? 'Idle' : 'API unavailable',
+    idle: supported ? 'Idle' : 'Unavailable',
     preparing: method === 'track' ? 'Preparing audio' : 'Starting…',
     starting: 'Starting…',
-    listening: 'Listening',
+    listening: recorded ? 'Recording' : 'Listening',
     stopping: 'Finishing',
+    loading: 'Loading speech model…',
+    transcribing: 'Transcribing…',
     finished: run?.success ? 'Complete' : 'Unsuccessful'
   };
   const status = $('status');
@@ -238,9 +244,13 @@ function renderRun() {
   const error = run?.errors.at(-1)?.message || (ready && run.termination === 'page-hidden' ? 'Recognition stopped when the page was hidden.' :
     ready && !run.transcripts.final.trim() ? 'No final transcript was returned.' :
     !window.isSecureContext ? 'Recognition requires HTTPS or localhost.' :
-    !Recognition ? 'This browser does not expose the speech recognition API.' : '');
+    !supported ? (recorded ? 'This browser cannot record and transcribe on this device.'
+      : 'This browser does not expose the speech recognition API.') : '');
   if ($('error').textContent !== error) $('error').textContent = error;
   $('error').hidden = !error;
+  $('transcript-help').textContent = recorded
+    ? 'Tap End to transcribe. The first run downloads the speech model.'
+    : 'Text appears as you speak. Edit it here after recognition ends.';
   const compatibility = Boolean(run?.iphoneCompatibility);
   const captureHint = current?.waitingForResult
     ? compatibility
@@ -258,10 +268,14 @@ function renderRun() {
         preparing: 'Cancel', starting: 'Starting…',
         listening: current.waitingForResult ? 'Cancel stalled run' : 'Ends automatically', stopping: 'Finishing…'
       }
-    : { preparing: 'Cancel audio setup', starting: 'End recognition', listening: 'End recognition', stopping: 'Finishing…' };
-  $('start-label').textContent = labels[state] ?? (method === 'track' ? 'Test audio file' : 'Start recognition');
+    : {
+        preparing: 'Cancel', starting: 'End recognition', listening: recorded ? 'End' : 'End recognition',
+        stopping: 'Finishing…', loading: 'Loading…', transcribing: 'Transcribing…'
+      };
+  $('start-label').textContent = labels[state] ?? (recorded ? 'Start' : method === 'track' ? 'Test audio file' : 'Start recognition');
   $('start').disabled = busy
-    ? state === 'stopping' || (compatibility && state !== 'preparing' && !current.waitingForResult)
+    ? ['stopping', 'loading', 'transcribing'].includes(state) ||
+      (compatibility && state !== 'preparing' && !current.waitingForResult)
     : !canStart;
   for (const id of ['language', 'method', 'case-select', 'mode', 'fillers', 'audio-file', 'next', 'repeat', 'mixed-case', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
   renderSave();
@@ -271,7 +285,7 @@ function renderRun() {
   const value = ready ? (run.editedTranscript ?? run.transcripts.final) : (run?.transcripts?.full ?? '');
   if (transcript.value !== value) transcript.value = value;
   $('reset').disabled = !canReset();
-  $('latencies').replaceChildren(...Object.entries(latencyLabels).map(([key, label]) => metric(label, ms(run?.latency[key]))));
+  $('latencies').replaceChildren(...Object.entries(recorded ? recordingLatencyLabels : browserLatencyLabels).map(([key, label]) => metric(label, ms(run?.latency[key]))));
   const events = run?.events ?? [];
   $('event-count').textContent = '(' + events.length + ')';
   const eventLabels = {
@@ -354,7 +368,7 @@ function startRun() {
     scoring: { mode: $('mode').value, fillers: $('fillers').value.split(',').map(value => value.trim()).filter(Boolean) },
     events: [], errors: [], manualStop: false, termination: null
   };
-  current = new RecognitionRun(Recognition, run, () => {
+  const update = () => {
     if (current?.run !== run) return;
     if (current.state === 'finished') {
       run.success = Boolean(run.transcripts.final.trim()) && !run.errors.length &&
@@ -362,7 +376,10 @@ function startRun() {
       run.evaluation = score(run.reference, run.transcripts.final, run.criticalTerms, run.scoring);
     }
     renderRun();
-  });
+  };
+  current = run.method === 'recorded'
+    ? new RecordedSpeechRun(run, update)
+    : new RecognitionRun(Recognition, run, update);
   current.start(file);
 }
 
@@ -461,6 +478,7 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => current?.abort('page-hidden'));
 $('support-info').replaceWith(detailsList([
+  ['On-device recording', recordingAvailable ? 'Available' : 'Unavailable'],
   ['Recognition API', Recognition ? (window.SpeechRecognition ? 'Standard constructor detected' : 'Prefixed constructor detected') : 'Unavailable'],
   ['Secure context', window.isSecureContext ? 'Yes' : 'No'],
   ['AudioTrack candidate', trackAvailable ? 'Eligible · actual recognition unverified' : 'Unavailable in this configuration'],
@@ -471,7 +489,7 @@ $('support-info').replaceWith(detailsList([
 
 if (session) {
   $('language').value = session.language;
-  $('method').value = session.method;
+  if (session.method !== 'live') $('method').value = session.method;
   $('network').value = session.network;
   $('environment').value = session.environment;
 }
@@ -600,11 +618,13 @@ function breakdown(runs) {
   };
 }
 
-const overviewColumns = ['Group', 'Runs', 'Success rate', 'Average WER', 'Median WER', 'Average MER', 'Median MER', 'First result P50', 'First result P95', 'Critical terms'];
+const overviewColumns = ['Group', 'Runs', 'Success rate', 'Average WER', 'Median WER', 'Average MER', 'Median MER',
+  'First result P50', 'First result P95', 'End → transcript P50', 'End → transcript P95', 'Critical terms'];
 const overviewRow = (label, metrics) => [
   label, metrics.total, pct(metrics.successRate), pct(metrics.wer.average), pct(metrics.wer.p50),
   pct(metrics.mer.average), pct(metrics.mer.p50),
-  ms(metrics.latency.firstResult.p50), ms(metrics.latency.firstResult.p95), pct(metrics.critical.rate)
+  ms(metrics.latency.firstResult.p50), ms(metrics.latency.firstResult.p95),
+  ms(metrics.latency.endToTranscript.p50), ms(metrics.latency.endToTranscript.p95), pct(metrics.critical.rate)
 ];
 
 function historicalRun(run) {
@@ -623,7 +643,7 @@ function historicalRun(run) {
     entry.append(el('h3', 'Edited transcript'), el('p', run.editedTranscript, 'raw'));
   }
   const latency = el('div', '', 'metrics');
-  latency.append(...Object.entries(latencyLabels).map(([key, label]) => metric(label, ms(run.latency[key]))));
+  latency.append(...Object.entries(run.method === 'recorded' ? recordingLatencyLabels : browserLatencyLabels).map(([key, label]) => metric(label, ms(run.latency[key]))));
   entry.append(latency);
   const actions = el('div', '', 'actions');
   for (const [label, suffix, type, data] of [

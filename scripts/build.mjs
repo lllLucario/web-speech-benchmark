@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { cp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { copyTranscriptionAssets } from './transcription-assets.mjs';
 
 const source = new URL('../site/', import.meta.url);
 const output = new URL('../dist/', import.meta.url);
@@ -18,5 +19,6 @@ for (const [file, content] of assets) {
     (_, quote, path) => quote + path + '?v=' + version + quote);
   await writeFile(new URL(file, output), versioned);
 }
+await copyTranscriptionAssets(output);
 await writeFile(new URL('.nojekyll', output), '');
 console.log('Built static site in dist/ (' + version + ')');

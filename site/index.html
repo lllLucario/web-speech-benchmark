@@ -34,7 +34,7 @@
           </div>
           <div class="settings">
             <label>Language<select id="language"><option value="en-AU">English · AU</option><option value="en-US">English · US</option><option value="en-GB">English · GB</option><option value="zh-CN">普通话 · zh-CN</option></select></label>
-            <label>Input method<select id="method"><option value="live">Live speech</option><option value="external">External audio playback</option><option value="track">AudioTrack</option></select></label>
+            <label>Input method<select id="method"><option value="recorded">Live speech</option><option value="live">Browser speech</option><option value="external">External audio playback</option><option value="track">AudioTrack</option></select></label>
           </div>
           <p id="iphone-help" class="muted" hidden>Speak when Listening appears. Pause to finish.</p>
           <div id="audio-area" hidden>
@@ -52,7 +52,7 @@
           <label class="transcript-field">Transcript
             <textarea id="transcript" rows="4" readonly aria-describedby="transcript-help"></textarea>
           </label>
-          <p id="transcript-help" class="muted">Text appears as you speak. Edit it here after recognition ends.</p>
+          <p id="transcript-help" class="muted">Your transcript appears here. You can edit it before saving.</p>
           <div class="actions save-row">
             <button id="save" class="primary" type="button" disabled>Save run</button>
           </div>
