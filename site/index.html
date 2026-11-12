@@ -81,7 +81,7 @@
         </aside>
       </div>
       <section class="ruled" aria-labelledby="measurement-title">
-        <div class="section-heading"><h2 id="measurement-title">Event timing</h2><p>Intervals between browser events in milliseconds. Speech boundaries are approximate. ASR inference time is unavailable.</p></div>
+        <div class="section-heading"><h2 id="measurement-title">Final transcript latency</h2><p>Time from the browser’s last speech-end event to the final transcript. If either event is missing or they arrive out of order, latency is unavailable.</p></div>
         <div id="latencies" class="metrics"></div>
         <details><summary>Recognition event log <span id="event-count"></span></summary><ol id="events" class="events"></ol></details>
       </section>
@@ -146,7 +146,7 @@
             <li><strong>Normalized is the default.</strong> Both modes ignore case and punctuation. Normalized converts English number words through 999 to digits and skips the configured fillers for WER and MER. It treats <code>ten dollars</code>, <code>10$</code> and <code>$10</code> as equivalent.</li>
             <li><strong>Critical phrases.</strong> Each phrase must appear as a contiguous sequence of units. Normalized applies the same number rules here and keeps fillers. The match rate is the number of phrases found divided by the number checked.</li>
             <li><strong>Recognition success.</strong> A run needs a non-blank original final transcript, a normal end and no recorded errors. A failed run can still receive a score. With an empty transcript and a scorable reference, the error rate is 100%.</li>
-            <li><strong>Latency.</strong> Results show time between browser events separately from accuracy. Missing events show N/A and are excluded from latency averages and percentiles.</li>
+            <li><strong>Latency.</strong> Latency measures the wait from the browser’s last speech-end event to the final transcript. Runs without a reliable measurement show N/A and are excluded from averages and percentiles.</li>
           </ul>
           <p class="muted">Saved scores use the browser’s original final transcript. Your edits are saved separately.</p>
         </section>

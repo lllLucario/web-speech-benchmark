@@ -143,7 +143,7 @@ export const browserLatencyLabels = {
   startup: 'Start request → recognition start',
   firstResult: 'Start request → first result',
   speechToResult: 'Speech start → first result',
-  speechToFinal: 'Speech end → first new final result',
+  speechToFinal: 'Speech end → final transcript',
   speechToEnd: 'Speech end → recognition end',
   stopToEnd: 'Manual stop → recognition end'
 };
@@ -165,8 +165,9 @@ export function timings(events) {
   const speechEnd = events[speechEndIndex]?.ms;
   const end = first('onend');
   const result = first('onresult', event => event.hasResult);
-  const final = speechEndIndex < 0 ? undefined :
-    events.slice(speechEndIndex + 1).find(event => event.name === 'onresult' && event.newFinal)?.ms;
+  const finalIndex = events.findLastIndex(event =>
+    event.name === 'onresult' && event.newFinal && event.hasResult !== false);
+  const final = finalIndex > speechEndIndex ? events[finalIndex]?.ms : undefined;
   return {
     startup: interval(begin, first('onstart')),
     firstResult: interval(begin, result),
@@ -203,7 +204,7 @@ export function aggregate(runs) {
     wer: stats(runs.filter(run => run.evaluation.metric !== 'MER').map(run => run.evaluation.wer)),
     mer: stats(runs.filter(run => run.evaluation.metric === 'MER').map(run => run.evaluation.mer)),
     critical: { matched, total: terms.length, rate: terms.length ? matched / terms.length : null },
-    latency: Object.fromEntries(Object.keys(latencyLabels).map(key => [key, stats(runs.map(run => run.latency[key]))]))
+    latency: Object.fromEntries(Object.keys(latencyLabels).map(key => [key, stats(runs.map(run => key === 'speechToFinal' && !run.success ? null : run.latency[key]))]))
   };
 }
 

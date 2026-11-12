@@ -1,5 +1,5 @@
 import { builtInDatasetVersion, loadCases, parseDataset } from './dataset.js';
-import { aggregate, csv, groupMetrics, joinRaw, json, browserLatencyLabels, latencyLabels, recordingLatencyLabels, score } from './benchmark.js';
+import { aggregate, csv, groupMetrics, joinRaw, json, latencyLabels, score, timings } from './benchmark.js';
 import { audioTrackCandidate, inputLabels, RecognitionRun } from './recognition.js';
 
 const $ = id => document.getElementById(id);
@@ -33,6 +33,13 @@ function readStorage() {
 const stored = readStorage();
 let cases = loadCases(stored.cases, stored.datasetVersion);
 const sessions = stored.sessions ?? [];
+for (const saved of sessions) {
+  for (const run of saved.runs) {
+    if (run.method !== 'recorded' && run.events?.length) {
+      run.latency.speechToFinal = timings(run.events).speechToFinal;
+    }
+  }
+}
 let session = sessions.at(-1) ?? null;
 let caseId = cases[0].id;
 let current = null;
@@ -275,7 +282,7 @@ function renderRun() {
     : joinRaw(transcriptPrefix, run?.transcripts?.full ?? '');
   if (transcript.value !== value) transcript.value = value;
   $('reset').disabled = !canReset();
-  $('latencies').replaceChildren(...Object.entries(browserLatencyLabels).map(([key, label]) => metric(label, ms(run?.latency[key]))));
+  $('latencies').replaceChildren(metric(latencyLabels.speechToFinal, ms(ready && run.success ? run.latency.speechToFinal : null)));
   const events = (run?.events ?? []).filter(event => !event.name.startsWith('startupAudio'));
   $('event-count').textContent = '(' + events.length + ')';
   $('events').replaceChildren(...events.map(event => el('li', ms(event.ms) + ' · ' + event.name +
@@ -602,11 +609,11 @@ function breakdown(runs) {
   };
 }
 
-const overviewColumns = ['Group', 'Runs', 'Success rate', 'Average WER', 'Median WER', 'Average MER', 'Median MER', 'First result P50', 'First result P95', 'Critical terms'];
+const overviewColumns = ['Group', 'Runs', 'Success rate', 'Average WER', 'Median WER', 'Average MER', 'Median MER', 'Final transcript latency P50', 'Final transcript latency P95', 'Critical terms'];
 const overviewRow = (label, metrics) => [
   label, metrics.total, pct(metrics.successRate), pct(metrics.wer.average), pct(metrics.wer.p50),
   pct(metrics.mer.average), pct(metrics.mer.p50),
-  ms(metrics.latency.firstResult.p50), ms(metrics.latency.firstResult.p95), pct(metrics.critical.rate)
+  ms(metrics.latency.speechToFinal.p50), ms(metrics.latency.speechToFinal.p95), pct(metrics.critical.rate)
 ];
 
 function historicalRun(run) {
@@ -625,7 +632,8 @@ function historicalRun(run) {
     entry.append(el('h3', 'Edited transcript'), el('p', run.editedTranscript, 'raw'));
   }
   const latency = el('div', '', 'metrics');
-  latency.append(...Object.entries(run.method === 'recorded' ? recordingLatencyLabels : browserLatencyLabels).map(([key, label]) => metric(label, ms(run.latency[key]))));
+  const key = run.method === 'recorded' ? 'endToTranscript' : 'speechToFinal';
+  latency.append(metric(latencyLabels[key], ms(run.success ? run.latency[key] : null)));
   entry.append(latency);
   const actions = el('div', '', 'actions');
   for (const [label, suffix, type, data] of [
@@ -660,7 +668,9 @@ function renderHistory() {
     metric('Failed', String(total.failed)), metric('Success rate', pct(total.successRate)),
     metric('Average WER', pct(total.wer.average)), metric('Median WER', pct(total.wer.p50)),
     metric('Average MER', pct(total.mer.average)), metric('Median MER', pct(total.mer.p50)),
-    metric('Critical phrase matches', pct(total.critical.rate)));
+    metric('Critical phrase matches', pct(total.critical.rate)),
+    metric('Final transcript latency P50', ms(total.latency.speechToFinal.p50)),
+    metric('Final transcript latency P95', ms(total.latency.speechToFinal.p95)));
   root.append(el('p', visible.length + ' session(s) · ' + [...new Set(runs.map(inputName))].join(' / '), 'muted'), stats);
   const groups = breakdown(runs);
   for (const [title, entries] of [
@@ -672,11 +682,13 @@ function renderHistory() {
     root.append(section);
   }
   const latency = el('section', '', 'ruled');
-  latency.append(el('h2', 'Latency by input method'),
-    table(['Input method / interval', 'Measured', 'Missing', 'Average', 'P50', 'P95', 'Min', 'Max'],
-      groups.input.flatMap(item => Object.entries(item.latency).map(([key, value]) =>
-        [item.group + ' · ' + latencyLabels[key], value.count, value.missing,
-          ms(value.average), ms(value.p50), ms(value.p95), ms(value.min), ms(value.max)])), 'Latency by input method'));
+  latency.append(el('h2', 'Final transcript latency by input method'),
+    table(['Input method', 'Measured', 'Missing', 'Average', 'P50', 'P95', 'Min', 'Max'],
+      groups.input.map(item => {
+        const value = item.latency.speechToFinal;
+        return [item.group, value.count, value.missing,
+          ms(value.average), ms(value.p50), ms(value.p95), ms(value.min), ms(value.max)];
+      }), 'Final transcript latency by input method'));
   root.append(latency);
   if ($('compare-sessions').checked && sessions.length > 1) {
     const comparison = el('section', '', 'ruled');

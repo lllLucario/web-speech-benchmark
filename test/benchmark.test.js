@@ -42,6 +42,15 @@ test('missing or out-of-order events never become synthetic latency', () => {
   ]), { startup: 10, firstResult: 15, speechToResult: null, speechToFinal: null, speechToEnd: 30, stopToEnd: null });
 });
 
+test('final transcript latency waits for the last final segment', () => {
+  assert.equal(timings([
+    { name: 'onspeechend', ms: 100 },
+    { name: 'onresult', ms: 140, newFinal: true },
+    { name: 'onresult', ms: 175, newFinal: true },
+    { name: 'onend', ms: 180 }
+  ]).speechToFinal, 75);
+});
+
 test('latency stats skip missing values and interpolate P50/P95', () => {
   const { p95, ...summary } = stats([null, 30, 0, 10, 20]);
   assert.deepEqual(summary, { count: 4, missing: 1, average: 15, p50: 15, min: 0, max: 30 });

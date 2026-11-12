@@ -32,7 +32,7 @@ Open **Results** to select a session, review saved runs and compare sessions. Ex
 
 ## Measurements
 
-Event offsets use `performance.now()` from the start of the attempt. Measurements are differences between observed browser events, and speech boundaries are approximate. Missing events and reversed intervals produce N/A. The end-of-speech metrics use the last speech-end event and, for final-result latency, the first new final result after it.
+Event offsets use `performance.now()` from the start of the attempt. Measurements are differences between observed browser events, and speech boundaries are approximate. Missing events and reversed intervals produce N/A. The primary latency metric measures the time from the last browser speech-end event to the last final transcript result in a successful run. Other event timings remain in the diagnostic exports.
 
 For references containing Han characters, the benchmark uses mixed error rate (MER). Each Han character and English word counts as one token. MER uses the same edit-distance formula over those tokens and is reported separately from WER. The scorer keeps simplified and traditional forms distinct and never translates a transcript. [MER definition](https://dihana.cps.unizar.es/proceedings/ICASSP/2012/pdfs/0004889.pdf)
 
