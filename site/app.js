@@ -1,4 +1,4 @@
-import { builtInCases, mixedCases, parseDataset } from './dataset.js';
+import { builtInDatasetVersion, loadCases, parseDataset } from './dataset.js';
 import { aggregate, csv, groupMetrics, joinRaw, json, browserLatencyLabels, latencyLabels, recordingLatencyLabels, score } from './benchmark.js';
 import { audioTrackCandidate, inputLabels, RecognitionRun } from './recognition.js';
 
@@ -31,7 +31,7 @@ function readStorage() {
   catch { storageError = true; return {}; }
 }
 const stored = readStorage();
-let cases = stored.cases ?? structuredClone(builtInCases);
+let cases = loadCases(stored.cases, stored.datasetVersion);
 const sessions = stored.sessions ?? [];
 let session = sessions.at(-1) ?? null;
 let caseId = cases[0].id;
@@ -43,7 +43,7 @@ let noticeTimer;
 
 function persist() {
   try {
-    localStorage.setItem(STORAGE, json({ cases, sessions }));
+    localStorage.setItem(STORAGE, json({ datasetVersion: builtInDatasetVersion, cases, sessions }));
     return true;
   } catch {
     notice('Browser storage is unavailable or full. Export your results before closing.');
@@ -288,10 +288,15 @@ function renderRun() {
   $('next').disabled = busy || position === sequence.length - 1;
 }
 
+function isMixedCase(item) {
+  return /\p{Script=Han}/u.test(item.reference) && /\p{Script=Latin}/u.test(item.reference);
+}
+
 function fillCaseOptions(queue = []) {
   const label = item => item.id + ' · ' + item.category + (item.completed ? ' ✓' : '');
   $('case-select').replaceChildren(...cases.map(item => new Option(label(item), item.id)));
   $('queue').replaceChildren(...cases.map(item => new Option(label(item), item.id, false, queue.includes(item.id))));
+  $('mixed-case').hidden = !cases.some(isMixedCase);
   renderCase();
 }
 
@@ -317,7 +322,7 @@ function queueIds() {
 const configuration = () => {
   const method = $('method').value;
   return {
-    language: $('language').value, method,
+    language: $('language').value, method, datasetVersion: builtInDatasetVersion,
     autoEnd: method === 'live',
     iphoneCompatibility: ios && method === 'live',
     network: $('network').value.trim(), environment: $('environment').value
@@ -358,7 +363,7 @@ function startRun() {
     caseId, category: item.category, reference: item.reference, criticalTerms: [...item.criticalTerms],
     notes: item.notes, audioReference: item.audio, fileName: parent.method === 'track' ? file.name : null,
     browser, device, ...settings, interim: true,
-    scoring: { mode: $('mode').value, fillers: $('fillers').value.split(',').map(value => value.trim()).filter(Boolean) },
+    scoring: { version: 2, mode: $('mode').value, fillers: $('fillers').value.split(',').map(value => value.trim()).filter(Boolean) },
     events: [], errors: [], manualStop: false, termination: null
   };
   current = new RecognitionRun(Recognition, run, () => {
@@ -419,17 +424,8 @@ bind('next', () => {
 });
 bind('repeat', clearRun);
 bind('mixed-case', () => {
-  if (active()) return;
-  const missing = mixedCases.filter(item => !cases.some(existing => existing.id === item.id));
-  if (missing.length) {
-    cases = [...cases, ...structuredClone(missing)];
-    fillCaseOptions(batchSelection());
-    persist();
-  }
-  const prompt = cases.find(item =>
-    mixedCases.some(example => example.id === item.id) && /\p{Script=Han}/u.test(item.reference));
+  const prompt = cases.find(isMixedCase);
   if (prompt) selectCase(prompt.id);
-  else notice('The built-in mixed prompt IDs are already used in this dataset.');
 });
 bind('new-session', () => {
   const nextSession = makeSession();

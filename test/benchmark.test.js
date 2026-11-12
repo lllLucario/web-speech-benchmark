@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { align, collectResults, csv, json, score, stats, timings, transcripts } from '../site/benchmark.js';
-import { builtInCases, parseDataset } from '../site/dataset.js';
+import { builtInCases, loadCases, parseDataset } from '../site/dataset.js';
 
 test('WER reports all edit types and can exceed 100%', () => {
   const result = score('one two three', 'two four five six');
@@ -55,12 +55,42 @@ test('exports preserve JSON and escape CSV punctuation and spreadsheet formulas'
   assert.equal(csv(records), "\"raw\",\"ms\"\r\n\"x, \"\"y\"\"\n!\",\"\"\r\n\"'=3+5\",\"0\"\r\n");
 });
 
-test('dataset includes 30 English prompts and six mixed prompts', () => {
+test('dataset replaces cached built-in cases with the 50 benchmark prompts', () => {
   const entries = parseDataset({ cases: builtInCases });
-  assert.equal(entries.length, 36);
-  assert.equal(new Set(entries.map(entry => entry.category)).size, 11);
-  assert.equal(entries.filter(entry => entry.id.startsWith('MIX-')).length, 6);
+  assert.equal(entries.length, 50);
+  assert.equal(entries.filter(entry => entry.category === 'English · Short').length, 40);
+  assert.equal(entries.filter(entry => entry.category === 'English · Long').length, 10);
+  assert.equal(entries[0].id, 'ASR-01');
+  assert.equal(entries[49].id, 'ASR-50');
   assert.throws(() => parseDataset([entries[0], entries[0]]), /Duplicate/u);
+
+  const custom = { id: 'CUSTOM-1', reference: 'A custom prompt', category: 'Custom' };
+  const legacy = { ...custom, id: 'ORD-01' };
+  const migrated = loadCases([legacy, custom]);
+  assert.equal(migrated.length, 51);
+  assert.equal(migrated.some(entry => entry.id === legacy.id), false);
+  assert.ok(migrated.includes(custom));
+  assert.deepEqual(loadCases([custom]), [custom]);
+});
+
+test('normalized scoring equates spoken and written dollar amounts while retaining their value and unit', () => {
+  const options = { mode: 'normalized' };
+  for (const transcript of ['$10', '10$', '10 dollars', '$10.00']) {
+    const evaluation = score('ten dollars', transcript, ['ten dollars'], options);
+    assert.equal(evaluation.wer, 0, transcript);
+    assert.equal(evaluation.critical[0].matched, true, transcript);
+  }
+  assert.equal(score('one hundred and fifty dollars', '150$', [], options).wer, 0);
+  assert.equal(score('twenty-five dollars', '$25', [], options).wer, 0);
+  assert.equal(score('十份 ten dollars', '十份 10$', [], options).mer, 0);
+  for (const transcript of ['$11', 'ten', '€10', '$10.50']) {
+    const evaluation = score('ten dollars', transcript, ['ten dollars'], options);
+    assert.ok(evaluation.wer > 0, transcript);
+    assert.equal(evaluation.critical[0].matched, false, transcript);
+  }
+  assert.ok(score('no peanuts, eighty dollars', 'peanuts, $80', ['no peanuts'], options).wer > 0);
+  assert.equal(score('three, no sorry, four people', '3, no sorry, 4 people', [], options).wer, 0);
+  assert.ok(score('ten dollars', '$10', [], { mode: 'strict' }).wer > 0);
 });
 
 test('aggregation counts failed runs, excludes missing timings and keeps methods separate', async () => {

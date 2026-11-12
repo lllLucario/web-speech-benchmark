@@ -62,12 +62,12 @@
           <blockquote id="reference"></blockquote>
           <p id="case-notes" class="muted" hidden></p>
           <p id="mixed-help" class="muted" hidden>Read the whole order using both languages. Try once with 普通话 and again with English · AU. The browser gets one recognition language per run.</p>
-          <div class="actions"><button id="mixed-case" type="button">Try 中文 + English</button><button id="repeat" type="button">Repeat case</button><button id="next" type="button">Next case →</button></div>
+          <div class="actions"><button id="mixed-case" type="button" hidden>Try 中文 + English</button><button id="repeat" type="button">Repeat case</button><button id="next" type="button">Next case →</button></div>
           <details>
             <summary>Scoring settings</summary>
             <label>Evaluation mode<select id="mode"><option value="normalized" selected>Normalized</option><option value="strict">Strict</option></select></label>
             <label id="fillers-label">Ignore these fillers <input id="fillers" value="uh, um, er" autocomplete="off"></label>
-            <p class="muted">Both modes ignore case and punctuation. Normalized also treats number words zero–twenty as digits and skips the listed filler tokens.</p>
+            <p class="muted">Both modes ignore case and punctuation. Normalized also matches spoken and written numbers and dollar amounts, and skips the listed filler tokens.</p>
           </details>
           <details id="session-settings">
             <summary>Batch setup</summary>
@@ -143,7 +143,7 @@
           <h2 id="scoring-rules-title">How scoring works</h2>
           <ul class="scoring-rules">
             <li><strong>WER / MER.</strong> English references use word error rate. References with Han characters use mixed error rate, counting each Han character and each English word as one unit. Error rate = (substitutions + deletions + insertions) ÷ reference units. Accuracy = 1 − error rate.</li>
-            <li><strong>Normalized is the default.</strong> Both modes ignore case and punctuation. Normalized also maps English number words zero–twenty to digits and skips the configured fillers for WER and MER. For example, <code>two coffees</code> and <code>2 coffees</code> score the same.</li>
+            <li><strong>Normalized is the default.</strong> Both modes ignore case and punctuation. Normalized converts English number words through 999 to digits and skips the configured fillers for WER and MER. It treats <code>ten dollars</code>, <code>10$</code> and <code>$10</code> as equivalent.</li>
             <li><strong>Critical phrases.</strong> Each phrase must appear as a contiguous sequence of units. Normalized applies the same number rules here and keeps fillers. The match rate is the number of phrases found divided by the number checked.</li>
             <li><strong>Recognition success.</strong> A run needs a non-blank original final transcript, a normal end and no recorded errors. A failed run can still receive a score. With an empty transcript and a scorable reference, the error rate is 100%.</li>
             <li><strong>Latency.</strong> Results show time between browser events separately from accuracy. Missing events show N/A and are excluded from latency averages and percentiles.</li>

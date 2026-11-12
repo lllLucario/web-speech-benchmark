@@ -1,77 +1,68 @@
-const groups = {
-  'Simple orders': [
-    ['I’d like a flat white, please.', 'flat white'],
-    ['Can I have a bowl of tomato soup?', 'tomato soup'],
-    ['A toasted ham and cheese sandwich, please.', 'toasted|ham and cheese']
-  ],
-  'Multiple items': [
-    ['One cheeseburger and two large fries, please.', 'one|cheeseburger|two|large fries'],
-    ['I’ll have a fish taco, a side salad and a lemonade.', 'fish taco|side salad|lemonade'],
-    ['Can we get garlic bread, two lasagnas and a jug of water?', 'garlic bread|two|lasagnas|jug of water']
-  ],
-  'Quantities': [
-    ['I need six chicken nuggets and three barbecue sauces.', 'six|chicken nuggets|three|barbecue sauces'],
-    ['Could we get twelve oysters and four lemon wedges?', 'twelve|oysters|four|lemon wedges'],
-    ['Two portions of dumplings and one bowl of rice.', 'two|dumplings|one|rice']
-  ],
-  'Sizes': [
-    ['Make that a small iced tea and a large hot chocolate.', 'small iced tea|large hot chocolate'],
-    ['A medium chips and an extra large cola, please.', 'medium chips|extra large cola'],
-    ['I’ll take the regular poke bowl with a small sparkling water.', 'regular poke bowl|small sparkling water']
-  ],
-  'Food modifiers': [
-    ['One large cappuccino, extra hot, no sugar.', 'one|large cappuccino|extra hot|no sugar'],
-    ['Add avocado and put the dressing on the side.', 'add avocado|dressing on the side'],
-    ['Could I get my steak medium rare with extra pepper?', 'steak|medium rare|extra pepper']
-  ],
-  'Negative instructions': [
-    ['Can I get a chicken burger with no onions?', 'chicken burger|no onions'],
-    ['Please leave out the peanuts and don’t add sesame oil.', 'leave out|peanuts|don’t add|sesame oil'],
-    ['The salad without croutons and the wrap without cheese.', 'without croutons|without cheese']
-  ],
-  'Fillers and hesitations': [
-    ['Uh, I’d like two iced lattes, um, with oat milk.', 'uh|two|iced lattes|um|oat milk'],
-    ['Um, can I get, uh, a veggie burger and a small fries?', 'um|uh|veggie burger|small fries'],
-    ['Er, I think I’ll have the pumpkin soup with, um, sourdough.', 'er|pumpkin soup|um|sourdough']
-  ],
-  'Self-corrections': [
-    ['Actually, make that three coffees instead of two.', 'three|coffees|instead of two'],
-    ['I’ll have a beef taco, sorry, a fish taco with no salsa.', 'beef taco|fish taco|no salsa'],
-    ['One medium latte, wait, make it a large flat white.', 'medium latte|large flat white']
-  ],
-  'Uncommon menu names': [
-    ['Can I get a fettuccine Alfredo and a sparkling water?', 'fettuccine Alfredo|sparkling water'],
-    ['I’d like the shakshuka and a side of labneh.', 'shakshuka|labneh'],
-    ['We’ll share the okonomiyaki and the yuzu granita.', 'okonomiyaki|yuzu granita']
-  ],
-  'Longer sentences': [
-    ['For the table, could we get two margherita pizzas, one with extra basil and the other without mozzarella?', 'two|margherita pizzas|extra basil|without mozzarella'],
-    ['I’d like the salmon with roast potatoes instead of rice, and could you put the lemon butter sauce on the side?', 'salmon|roast potatoes|instead of rice|lemon butter sauce|on the side'],
-    ['Can I have three kids’ meals, two with apple juice and one with water, and please leave the pickles off all the burgers?', 'three|kids’ meals|two|apple juice|one|water|leave the pickles off']
-  ]
-};
+// Source: 语音识别对比测试表.xlsx, 测试记录, rows 4–53.
+export const builtInCases = [
+  {"id": "ASR-01", "category": "English · Short", "reference": "There are three of us, no peanuts please, and our budget is eighty dollars.", "audio": "1.wav", "notes": "Source recording: 4.5 s", "criticalTerms": ["three of us", "no peanuts", "eighty dollars"], "completed": false},
+  {"id": "ASR-02", "category": "English · Short", "reference": "Two people, and neither of us can eat spicy food.", "audio": "2.wav", "notes": "Source recording: 2.8 s", "criticalTerms": ["two people", "neither of us can eat spicy food"], "completed": false},
+  {"id": "ASR-03", "category": "English · Short", "reference": "I'm allergic to gluten. Do you have any gluten free dishes?", "audio": "3.wav", "notes": "Source recording: 3.6 s", "criticalTerms": ["allergic to gluten", "gluten free"], "completed": false},
+  {"id": "ASR-04", "category": "English · Short", "reference": "Four people including one child, and we'd like it mildly spicy.", "audio": "4.wav", "notes": "Source recording: 4.1 s", "criticalTerms": ["four people", "one child", "mildly spicy"], "completed": false},
+  {"id": "ASR-05", "category": "English · Short", "reference": "I don't eat beef, and I don't eat pork either.", "audio": "5.wav", "notes": "Source recording: 2.8 s", "criticalTerms": ["don't eat beef", "don't eat pork"], "completed": false},
+  {"id": "ASR-06", "category": "English · Long", "reference": "Hi, we're having a work team dinner today with eight people. Two of my colleagues are vegetarian, and one has a fairly severe allergy to peanuts and tree nuts, so please don't put peanuts in any of the dishes. Everyone prefers lighter food, mildly spicy is fine, and our budget is about forty dollars per person, no more than three hundred and fifty dollars in total.", "audio": "6.wav", "notes": "Source recording: 20.5 s", "criticalTerms": ["eight people", "two of my colleagues are vegetarian", "allergy to peanuts and tree nuts", "don't put peanuts", "mildly spicy", "forty dollars per person", "three hundred and fifty dollars"], "completed": false},
+  {"id": "ASR-07", "category": "English · Short", "reference": "Five of us, with a budget of one hundred and fifty dollars.", "audio": "7.wav", "notes": "Source recording: 3.2 s", "criticalTerms": ["five of us", "one hundred and fifty dollars"], "completed": false},
+  {"id": "ASR-08", "category": "English · Long", "reference": "Um, let me explain our situation. It's my mum's birthday today, so the whole family is eating out. There are five adults and two kids, one is four and the other is seven. My mum doesn't eat beef or lamb, she mostly eats vegetarian food. My dad would like the dishes not to be too salty. My husband is allergic to prawns and crab, so no seafood at all, and no shellfish either. The kids can't eat anything spicy, but mild is fine for the adults. Also please go easy on spring onion, ginger and garlic, my mum doesn't like the taste, and no coriander. Our budget is, um, somewhere between four hundred and five hundred dollars, actually no, four hundred and fifty at most. Could you recommend a few suitable dishes?", "audio": "8.wav", "notes": "Source recording: 43.3 s", "criticalTerms": ["five adults and two kids", "doesn't eat beef or lamb", "allergic to prawns and crab", "no seafood", "no shellfish", "can't eat anything spicy", "mild is fine", "go easy on spring onion, ginger and garlic", "no coriander", "four hundred and fifty at most"], "completed": false},
+  {"id": "ASR-09", "category": "English · Short", "reference": "Do you have any desserts without dairy?", "audio": "9.wav", "notes": "Source recording: 2 s", "criticalTerms": ["desserts without dairy"], "completed": false},
+  {"id": "ASR-10", "category": "English · Short", "reference": "Six people, and two of them are vegetarian.", "audio": "10.wav", "notes": "Source recording: 2.6 s", "criticalTerms": ["six people", "two of them are vegetarian"], "completed": false},
+  {"id": "ASR-11", "category": "English · Short", "reference": "I have a really severe peanut allergy, there can't be any at all.", "audio": "11.wav", "notes": "Source recording: 4 s", "criticalTerms": ["severe peanut allergy"], "completed": false},
+  {"id": "ASR-12", "category": "English · Short", "reference": "Can you recommend something a bit spicy for three people?", "audio": "12.wav", "notes": "Source recording: 3 s", "criticalTerms": ["a bit spicy", "three people"], "completed": false},
+  {"id": "ASR-13", "category": "English · Long", "reference": "I'd like to order takeaway for me and my flatmate, so two people. My flatmate is allergic to dairy, so no milk or cheese. I don't eat pork, and neither of us handles spicy food very well. The budget is about sixty dollars in total, ideally with one main, one soup and one vegetable dish. If there's a dessert, it needs to be free of egg and dairy.", "audio": "13.wav", "notes": "Source recording: 20.4 s", "criticalTerms": ["two people", "allergic to dairy", "no milk or cheese", "don't eat pork", "spicy food", "sixty dollars", "free of egg and dairy"], "completed": false},
+  {"id": "ASR-14", "category": "English · Short", "reference": "Twelve of us are having a group dinner, budget five hundred dollars.", "audio": "14.wav", "notes": "Source recording: 3.9 s", "criticalTerms": ["twelve of us", "five hundred dollars"], "completed": false},
+  {"id": "ASR-15", "category": "English · Long", "reference": "Hi, this is for a university club event. We originally said fifteen people, then someone just pulled out, so now it should be twelve, no wait, let me double check, it's thirteen. Three of them are halal, so no pork and no alcohol, please don't use cooking wine either. One student is allergic to sesame, including sesame oil. Another is allergic to gluten, so no noodles or dumplings or anything made with wheat. Everyone else eats pretty much anything. A few people like spicy food, so one or two medium spicy dishes would be good, and the rest should be not spicy. Our budget is twenty five dollars per person, a bit over three hundred dollars in total. Please recommend something, ideally split into a spicy group and a non spicy group.", "audio": "15.wav", "notes": "Source recording: 43.9 s", "criticalTerms": ["it's thirteen", "three of them are halal", "no pork and no alcohol", "don't use cooking wine", "allergic to sesame", "sesame oil", "allergic to gluten", "made with wheat", "medium spicy", "not spicy", "twenty five dollars per person", "three hundred dollars"], "completed": false},
+  {"id": "ASR-16", "category": "English · Short", "reference": "Three, no sorry, four people.", "audio": "16.wav", "notes": "Source recording: 1.8 s", "criticalTerms": ["four people"], "completed": false},
+  {"id": "ASR-17", "category": "English · Short", "reference": "Um, so, no peanuts please, and, uh, two people.", "audio": "17.wav", "notes": "Source recording: 3.3 s", "criticalTerms": ["no peanuts", "two people"], "completed": false},
+  {"id": "ASR-18", "category": "English · Short", "reference": "Nothing spicy, no peanuts, and no beef either.", "audio": "18.wav", "notes": "Source recording: 2.8 s", "criticalTerms": ["nothing spicy", "no peanuts", "no beef"], "completed": false},
+  {"id": "ASR-19", "category": "English · Short", "reference": "My wife doesn't eat seafood and I'm allergic to nuts.", "audio": "19.wav", "notes": "Source recording: 3 s", "criticalTerms": ["doesn't eat seafood", "allergic to nuts"], "completed": false},
+  {"id": "ASR-20", "category": "English · Short", "reference": "Is there anything suitable for kids, not spicy, for three adults and two children?", "audio": "20.wav", "notes": "Source recording: 4.7 s", "criticalTerms": ["not spicy", "three adults and two children"], "completed": false},
+  {"id": "ASR-21", "category": "English · Short", "reference": "Two people, no spicy food please.", "audio": "21.wav", "notes": "Source recording: 2.2 s", "criticalTerms": ["two people", "no spicy food"], "completed": false},
+  {"id": "ASR-22", "category": "English · Short", "reference": "I'm allergic to peanuts.", "audio": "22.wav", "notes": "Source recording: 1.7 s", "criticalTerms": ["allergic to peanuts"], "completed": false},
+  {"id": "ASR-23", "category": "English · Short", "reference": "Table for four, our budget is fifty dollars.", "audio": "23.wav", "notes": "Source recording: 2.7 s", "criticalTerms": ["table for four", "fifty dollars"], "completed": false},
+  {"id": "ASR-24", "category": "English · Short", "reference": "Do you have anything gluten free?", "audio": "24.wav", "notes": "Source recording: 1.9 s", "criticalTerms": ["gluten free"], "completed": false},
+  {"id": "ASR-25", "category": "English · Short", "reference": "Three of us, and one person doesn't eat pork.", "audio": "25.wav", "notes": "Source recording: 2.6 s", "criticalTerms": ["three of us", "doesn't eat pork"], "completed": false},
+  {"id": "ASR-26", "category": "English · Long", "reference": "Hi, we're a family of four, two adults and two kids aged five and nine. My daughter has a severe peanut allergy, so please make sure nothing contains peanuts or peanut oil. My husband doesn't eat pork. The kids can't handle spicy food, but my husband and I are fine with medium. Our budget is around ninety dollars in total.", "audio": "26.wav", "notes": "Source recording: 19.6 s", "criticalTerms": ["family of four", "severe peanut allergy", "peanut oil", "doesn't eat pork", "can't handle spicy food", "fine with medium", "ninety dollars"], "completed": false},
+  {"id": "ASR-27", "category": "English · Short", "reference": "We are a group of six with a budget of one hundred and twenty dollars.", "audio": "27.wav", "notes": "Source recording: 3.7 s", "criticalTerms": ["group of six", "one hundred and twenty dollars"], "completed": false},
+  {"id": "ASR-28", "category": "English · Short", "reference": "No dairy and no beef, please.", "audio": "28.wav", "notes": "Source recording: 2.4 s", "criticalTerms": ["no dairy", "no beef"], "completed": false},
+  {"id": "ASR-29", "category": "English · Short", "reference": "Can you recommend a vegetarian dish for two?", "audio": "29.wav", "notes": "Source recording: 2.6 s", "criticalTerms": ["vegetarian dish for two"], "completed": false},
+  {"id": "ASR-30", "category": "English · Long", "reference": "Okay, so here's the situation. We're organising a team lunch for our office tomorrow. At the moment we have eleven people confirmed, but it might go up to twelve. Two of my colleagues are vegan, so no meat, no eggs, no dairy, and no honey either. One person is coeliac, so anything with wheat, barley, rye or regular soy sauce is out, it really has to be gluten free. Another colleague is allergic to shellfish, prawns and crab in particular, but she's fine with fish. A few people mentioned they don't like coriander, and one person asked for no garlic or onion if possible. Most of the team enjoys spicy food, but please keep at least half of the dishes mild. The budget is about twenty two dollars per person, so roughly two hundred and fifty dollars overall.", "audio": "30.wav", "notes": "Source recording: 45.5 s", "criticalTerms": ["up to twelve", "vegan", "no eggs", "no dairy", "no honey", "coeliac", "wheat, barley, rye", "soy sauce", "gluten free", "allergic to shellfish", "prawns and crab", "fine with fish", "don't like coriander", "no garlic or onion", "spicy food", "dishes mild", "twenty two dollars per person", "two hundred and fifty dollars"], "completed": false},
+  {"id": "ASR-31", "category": "English · Short", "reference": "Medium spicy is fine, five people.", "audio": "31.wav", "notes": "Source recording: 2.5 s", "criticalTerms": ["medium spicy", "five people"], "completed": false},
+  {"id": "ASR-32", "category": "English · Short", "reference": "Severe nut allergy, please be careful.", "audio": "32.wav", "notes": "Source recording: 2.4 s", "criticalTerms": ["severe nut allergy"], "completed": false},
+  {"id": "ASR-33", "category": "English · Long", "reference": "Can I get a recommendation for one? I'm trying to eat healthy at the moment, so something light, maybe grilled rather than fried. I'm allergic to sesame and to tree nuts, especially cashews and walnuts. I don't mind chilli, actually I quite like it hot. I'd like to keep it under twenty five dollars, and if possible no MSG.", "audio": "33.wav", "notes": "Source recording: 19.2 s", "criticalTerms": ["recommendation for one", "allergic to sesame", "tree nuts", "cashews and walnuts", "chilli", "like it hot", "twenty five dollars", "no MSG"], "completed": false},
+  {"id": "ASR-34", "category": "English · Short", "reference": "Eight people, two hundred dollars total.", "audio": "34.wav", "notes": "Source recording: 2.3 s", "criticalTerms": ["eight people", "two hundred dollars"], "completed": false},
+  {"id": "ASR-35", "category": "English · Short", "reference": "Um, three, no wait, four people, and no spicy.", "audio": "35.wav", "notes": "Source recording: 3.5 s", "criticalTerms": ["four people", "no spicy"], "completed": false},
+  {"id": "ASR-36", "category": "English · Short", "reference": "Actually make that no gluten and no dairy.", "audio": "36.wav", "notes": "Source recording: 2.6 s", "criticalTerms": ["no gluten", "no dairy"], "completed": false},
+  {"id": "ASR-37", "category": "English · Short", "reference": "My son is allergic to sesame, he's seven.", "audio": "37.wav", "notes": "Source recording: 3.1 s", "criticalTerms": ["allergic to sesame", "he's seven"], "completed": false},
+  {"id": "ASR-38", "category": "English · Long", "reference": "Hi there, um, I'm booking for my parents' anniversary dinner this Saturday. It'll be eight people, sorry, I mean nine, my cousin just confirmed. My dad would prefer dishes that aren't too sweet. My mum doesn't eat beef or lamb, and she really dislikes ginger. My uncle is allergic to eggs, and that includes anything with mayonnaise or egg wash on pastry. My cousin would like no raw fish, no oysters, and nothing with alcohol in the sauce. The rest of us eat pretty much everything, and we like a bit of spice, so a couple of hot dishes would be nice. We were thinking of a budget of around sixty dollars a head, so about five hundred and forty dollars in total, maybe a little more if needed.", "audio": "38.wav", "notes": "Source recording: 39.6 s", "criticalTerms": ["I mean nine", "doesn't eat beef or lamb", "dislikes ginger", "allergic to eggs", "egg wash", "no raw fish", "no oysters", "nothing with alcohol", "a couple of hot dishes", "sixty dollars a head", "five hundred and forty dollars"], "completed": false},
+  {"id": "ASR-39", "category": "English · Short", "reference": "I don't eat seafood or shellfish.", "audio": "39.wav", "notes": "Source recording: 2.3 s", "criticalTerms": ["don't eat seafood or shellfish"], "completed": false},
+  {"id": "ASR-40", "category": "English · Short", "reference": "What's good for two adults and one kid, nothing too hot?", "audio": "40.wav", "notes": "Source recording: 3.7 s", "criticalTerms": ["two adults and one kid", "nothing too hot"], "completed": false},
+  {"id": "ASR-41", "category": "English · Short", "reference": "There are four of us, and no dairy please.", "audio": "41.wav", "notes": "Source recording: 2.9 s", "criticalTerms": ["four of us", "no dairy"], "completed": false},
+  {"id": "ASR-42", "category": "English · Short", "reference": "Two people, nothing spicy, and a budget of sixty dollars.", "audio": "42.wav", "notes": "Source recording: 3.3 s", "criticalTerms": ["two people", "nothing spicy", "sixty dollars"], "completed": false},
+  {"id": "ASR-43", "category": "English · Short", "reference": "I'm allergic to peanuts, just so you know.", "audio": "43.wav", "notes": "Source recording: 2.3 s", "criticalTerms": ["allergic to peanuts"], "completed": false},
+  {"id": "ASR-44", "category": "English · Long", "reference": "Hi, there are four of us today. One is vegetarian, so no meat and no seafood. Another friend is allergic to both peanuts and cashews. None of us can really handle spicy food, so mild is best. Spring onion, ginger and garlic are fine, but no coriander please. Our budget is about one hundred and twenty dollars.", "audio": "44.wav", "notes": "Source recording: 19.1 s", "criticalTerms": ["four of us", "one is vegetarian", "no meat and no seafood", "allergic to both peanuts and cashews", "mild is best", "no coriander", "one hundred and twenty dollars"], "completed": false},
+  {"id": "ASR-45", "category": "English · Short", "reference": "Three people, mild is fine.", "audio": "45.wav", "notes": "Source recording: 2 s", "criticalTerms": ["three people", "mild is fine"], "completed": false},
+  {"id": "ASR-46", "category": "English · Short", "reference": "No beef and no pork, please.", "audio": "46.wav", "notes": "Source recording: 2.5 s", "criticalTerms": ["no beef", "no pork"], "completed": false},
+  {"id": "ASR-47", "category": "English · Long", "reference": "Hi, we're a study group going out to eat after our exam. There are seven of us, oh wait, eight, someone just arrived. Two of us are halal, so no pork, and please don't cook with alcohol. One person is allergic to dairy, so no milk, cheese or butter. Another person needs gluten free, so nothing made with wheat, no noodles or dumplings. Everyone else is fine and can eat spicy food, so a couple of spicy dishes would be good and the rest mild. Spring onion and garlic are okay, but go easy on the ginger. Our budget is around twenty dollars each, about one hundred and sixty dollars in total. Could you recommend something?", "audio": "47.wav", "notes": "Source recording: 37.9 s", "criticalTerms": ["eight", "two of us are halal", "no pork", "don't cook with alcohol", "allergic to dairy", "no milk, cheese or butter", "gluten free", "made with wheat", "spicy dishes", "rest mild", "go easy on the ginger", "twenty dollars each", "one hundred and sixty dollars"], "completed": false},
+  {"id": "ASR-48", "category": "English · Short", "reference": "Budget is about one hundred dollars, for five people.", "audio": "48.wav", "notes": "Source recording: 3.5 s", "criticalTerms": ["one hundred dollars", "five people"], "completed": false},
+  {"id": "ASR-49", "category": "English · Short", "reference": "Mildly spicy is okay, three people, and the budget is eighty dollars.", "audio": "49.wav", "notes": "Source recording: 4.5 s", "criticalTerms": ["mildly spicy", "three people", "eighty dollars"], "completed": false},
+  {"id": "ASR-50", "category": "English · Short", "reference": "So, like, maybe three people, um, and no peanuts.", "audio": "50.wav", "notes": "Source recording: 3.5 s", "criticalTerms": ["three people", "no peanuts"], "completed": false}
+];
 
-let number = 0;
-export const englishCases = Object.entries(groups).flatMap(([category, rows]) =>
-  rows.map(([reference, terms]) => ({
-    id: 'ORD-' + String(++number).padStart(2, '0'),
-    category, reference, audio: '', notes: '', criticalTerms: terms.split('|'), completed: false
-  }))
-);
+export const builtInDatasetVersion = 2;
 
-export const mixedCases = [
-  ['我要两杯 iced latte，一杯换成 oat milk。', ['两杯', 'iced latte', '一杯', 'oat milk']],
-  ['来一个 cheeseburger，不要 onion，再加一份 small fries。', ['cheeseburger', '不要', 'onion', 'small fries']],
-  ['我要一份 chicken burger，sorry，改成 fish burger。', ['chicken burger', '改成', 'fish burger']],
-  ['Can I get 一份 fettuccine Alfredo，再来一杯 sparkling water？', ['一份', 'fettuccine Alfredo', '一杯', 'sparkling water']],
-  ['两杯 flat white，一杯 extra hot，另一杯不要糖。', ['两杯', 'flat white', 'extra hot', '不要糖']],
-  ['我要一份 shakshuka，辣酱 on the side，打包带走。', ['shakshuka', '辣酱', 'on the side', '打包']]
-].map(([reference, criticalTerms], index) => ({
-  id: 'MIX-0' + (index + 1), category: 'Mandarin + English',
-  reference, criticalTerms, audio: '', notes: '', completed: false
-}));
-
-export const builtInCases = [...englishCases, ...mixedCases];
+export function loadCases(savedCases, savedVersion) {
+  if (!savedCases?.length) return structuredClone(builtInCases);
+  if (savedVersion === builtInDatasetVersion) return savedCases;
+  const legacyId = /^(?:ORD-(?:0[1-9]|[12][0-9]|30)|MIX-0[1-6])$/u;
+  if (!savedCases.some(item => legacyId.test(item.id))) return savedCases;
+  const custom = savedCases.filter(item => !legacyId.test(item.id));
+  const savedIds = new Set(custom.map(item => item.id));
+  return [...custom, ...structuredClone(builtInCases.filter(item => !savedIds.has(item.id)))];
+}
 
 export function parseDataset(input) {
   const cases = Array.isArray(input) ? input : input?.cases;

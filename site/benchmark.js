@@ -1,5 +1,20 @@
-const numbers = 'zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty'.split(' ');
-const numericWords = new Map(numbers.map((word, number) => [word, String(number)]));
+const smallNumbers = 'zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen'.split(' ');
+const tens = 'twenty thirty forty fifty sixty seventy eighty ninety'.split(' ');
+const numericWords = new Map([
+  ...smallNumbers.map((word, value) => [word, value]),
+  ...tens.map((word, index) => [word, (index + 2) * 10])
+]);
+
+const numberSeparator = String.raw`[ \t-]+`;
+const unit = smallNumbers.slice(1, 10).join('|');
+const underHundred = `(?:${tens.join('|')})(?:${numberSeparator}(?:${unit}))?|${smallNumbers.join('|')}`;
+const spokenNumber = new RegExp(
+  String.raw`(?<![\p{L}\p{N}])(?:(?:${unit})${numberSeparator}hundred(?:${numberSeparator}(?:and${numberSeparator})?(?:${underHundred}))?|${underHundred})(?![\p{L}\p{N}])`,
+  'gu'
+);
+const literal = String.raw`(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?`;
+const dollarAmount = new RegExp(String.raw`\$[ \t]*(${literal})(?![\p{L}\p{N}])|(?<![\p{L}\p{N}])(${literal})[ \t]*\$`, 'gu');
+const normalizedWords = new RegExp(String.raw`(?<![\p{L}\p{N}])${literal}(?![\p{L}\p{N}])|[\p{L}\p{N}]+|\p{Sc}`, 'gu');
 
 function words(text) {
   return text.toLowerCase().replace(/['’‘]/gu, '').match(/[\p{L}\p{N}]+/gu) ?? [];
@@ -7,14 +22,36 @@ function words(text) {
 
 const han = /\p{Script=Han}/u;
 
+function normalizeSpokenNumber(phrase) {
+  const [first, ...rest] = phrase.split(/[ \t-]+/u);
+  let value = numericWords.get(first);
+  if (rest[0] === 'hundred') {
+    value *= 100;
+    rest.shift();
+    if (rest[0] === 'and') rest.shift();
+  }
+  for (const word of rest) value += numericWords.get(word);
+  return String(value);
+}
+
+function normalizeLiteral(word) {
+  if (!/^\d[\d,.]*$/u.test(word)) return word;
+  const [whole, fraction] = word.replace(/,/gu, '').split('.');
+  const integer = whole.replace(/^0+(?=\d)/u, '');
+  const decimals = fraction?.replace(/0+$/u, '');
+  return decimals ? integer + '.' + decimals : integer;
+}
+
 export function tokenize(text, { mode = 'strict', fillers = [], mixed = false } = {}) {
-  const tokens = words(mixed ? text.replace(/\p{Script=Han}/gu, ' $& ') : text);
-  if (mode !== 'normalized') return tokens;
+  const separated = mixed ? text.replace(/\p{Script=Han}/gu, ' $& ') : text;
+  if (mode !== 'normalized') return words(separated);
   const ignored = new Set(fillers.flatMap(words).filter(word => !mixed || !han.test(word)));
-  return tokens.filter(word => !ignored.has(word)).map(word => {
-    if (/^\d+$/u.test(word)) return word.replace(/^0+(?=\d)/u, '');
-    return numericWords.get(word) ?? word;
-  });
+  const normalized = separated.toLowerCase().replace(/['’‘]/gu, '')
+    .replace(spokenNumber, normalizeSpokenNumber)
+    .replace(dollarAmount, (_, before, after) => ` ${before ?? after} dollars `);
+  return (normalized.match(normalizedWords) ?? [])
+    .filter(word => !ignored.has(word))
+    .map(word => word === 'dollar' ? 'dollars' : normalizeLiteral(word));
 }
 
 export function align(reference, hypothesis) {
