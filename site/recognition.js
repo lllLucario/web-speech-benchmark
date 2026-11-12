@@ -30,6 +30,8 @@ const browserErrors = {
   'language-not-supported': 'The recognition service rejected the selected language.'
 };
 
+const androidSilenceTimeoutMs = 15000;
+
 export class RecognitionRun {
   constructor(Recognition, run, onChange) {
     this.Recognition = Recognition;
@@ -64,6 +66,7 @@ export class RecognitionRun {
       for (const name of ['audiostart', 'soundstart', 'speechstart', 'speechend', 'soundend', 'audioend']) {
         recognition['on' + name] = () => {
           if (this.state === 'finished') return;
+          if (name === 'speechstart') clearTimeout(this.silenceDeadline);
           this.log('on' + name);
           this.notify();
         };
@@ -75,6 +78,16 @@ export class RecognitionRun {
           clearTimeout(this.deadline);
           this.state = 'listening';
           if (!this.slots.some(slot => slot.text.trim())) this.armResultNotice();
+          if (this.run.autoEnd && !this.run.iphoneCompatibility &&
+              (this.run.device?.platform === 'Android' || /\bAndroid\b/u.test(this.run.browser?.userAgent ?? ''))) {
+            this.silenceDeadline = setTimeout(() => {
+              if (this.state !== 'listening') return;
+              const message = 'No speech or transcript was reported for 15 seconds. Tap Start to try again.';
+              this.log('appTimeout', { code: 'silence-timeout', message });
+              this.fail('silence-timeout', message);
+              this.abort('silence-timeout');
+            }, androidSilenceTimeoutMs);
+          }
           try {
             if (this.source) {
               this.source.start();
@@ -95,13 +108,18 @@ export class RecognitionRun {
           text: result[0].transcript, isFinal: result.isFinal, confidence: result[0].confidence
         }));
         this.slots = slots;
-        if (slots.some(slot => slot.text.trim())) this.clearResultNotice();
+        if (slots.some(slot => slot.text.trim())) {
+          clearTimeout(this.silenceDeadline);
+          this.clearResultNotice();
+        }
         this.log('onresult', { resultIndex: event.resultIndex, results, hasResult: slots.some(slot => slot.text.length > 0), newFinal });
         this.notify();
       };
       recognition.onerror = event => {
         if (this.state === 'finished') return;
         this.log('onerror', { code: event.error, message: event.message });
+        if (this.run.termination === 'silence-timeout' && event.error === 'aborted') return;
+        clearTimeout(this.silenceDeadline);
         this.fail(event.error, browserErrors[event.error] || event.message || 'The recognition service reported an error.', event.message);
         this.clearResultNotice();
         this.stopAudio();
@@ -258,6 +276,7 @@ export class RecognitionRun {
 
   abort(reason) {
     if (this.state === 'finished' || this.closing) return;
+    clearTimeout(this.silenceDeadline);
     this.closing = true;
     this.run.termination = reason;
     if (!this.invoked) {
@@ -292,6 +311,7 @@ export class RecognitionRun {
 
   finish(reason) {
     clearTimeout(this.deadline);
+    clearTimeout(this.silenceDeadline);
     this.clearResultNotice();
     this.state = 'finished';
     this.run.termination = reason;

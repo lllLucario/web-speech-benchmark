@@ -224,3 +224,36 @@ test('live speech can end naturally without an iPhone startup cue', async () => 
   assert.equal(capture.run.termination, 'browser');
   assert.equal(capture.run.events.some(event => event.name === 'stop()'), false);
 });
+
+test('Android cancels a stalled silent run and preserves speech in the next round', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  class AndroidRecognition extends FakeRecognition {
+    abort() {
+      this.onerror({ error: 'aborted' });
+      this.onend();
+    }
+  }
+  const startAndroid = async () => {
+    const capture = makeRun(AndroidRecognition);
+    capture.run.device = { platform: 'Android' };
+    capture.run.autoEnd = true;
+    await capture.start();
+    return capture;
+  };
+
+  const silent = await startAndroid();
+  t.mock.timers.tick(14999);
+  assert.equal(silent.state, 'listening');
+  t.mock.timers.tick(1);
+  assert.equal(silent.state, 'finished');
+  assert.equal(silent.run.termination, 'silence-timeout');
+  assert.deepEqual(silent.run.errors.map(error => error.code), ['silence-timeout']);
+  assert.ok(silent.run.events.some(event => event.name === 'onerror' && event.code === 'aborted'));
+
+  const speaking = await startAndroid();
+  speaking.recognition.onspeechstart();
+  t.mock.timers.tick(20000);
+  assert.equal(speaking.state, 'listening');
+  speaking.recognition.onend();
+  assert.equal(speaking.run.termination, 'browser');
+});
