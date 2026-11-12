@@ -240,3 +240,38 @@ test('Cancelling an iPhone ready prompt does not start the microphone', async t 
   assert.equal(capture.recognition, null);
   assert.equal(capture.run.events.some(event => event.name === 'start()'), false);
 });
+
+test('iPhone manual End reapplies audio routing after the browser ends', async t => {
+  const changes = [];
+  const audioSession = {
+    get type() { return changes.at(-1) ?? 'auto'; },
+    set type(value) { changes.push(value); }
+  };
+  const navigatorProperty = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { value: { audioSession }, configurable: true });
+  t.after(() => {
+    if (navigatorProperty) Object.defineProperty(globalThis, 'navigator', navigatorProperty);
+    else delete globalThis.navigator;
+  });
+
+  class DelayedEnd extends FakeRecognition {
+    stop() {}
+  }
+
+  const capture = makeRun(DelayedEnd);
+  capture.run.iosAudioSessionTest = true;
+  await capture.start();
+  assert.equal(capture.recognition.continuous, true);
+  capture.requestStop();
+  assert.deepEqual(changes, []);
+  capture.recognition.onend();
+  assert.deepEqual(changes, ['playback', 'auto']);
+  assert.equal(capture.run.events.at(-1).name, 'audioSessionReset');
+  assert.equal(capture.state, 'finished');
+
+  const next = makeRun();
+  next.run.iosAudioSessionTest = true;
+  await next.start();
+  next.recognition.onend();
+  assert.deepEqual(changes, ['playback', 'auto']);
+});

@@ -1,13 +1,10 @@
 import { builtInCases, mixedCases, parseDataset } from './dataset.js';
-import { aggregate, browserLatencyLabels, csv, groupMetrics, json, latencyLabels, recordingLatencyLabels, score } from './benchmark.js';
+import { aggregate, csv, groupMetrics, json, browserLatencyLabels, latencyLabels, recordingLatencyLabels, score } from './benchmark.js';
 import { audioTrackCandidate, inputLabels, RecognitionRun } from './recognition.js';
-import { RecordedSpeechRun, supportsRecordedSpeech } from './recorded-speech.js';
 
 const $ = id => document.getElementById(id);
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const trackAvailable = audioTrackCandidate();
-const recordingOption = $('method').querySelector('[value=recorded]');
-const recordingAvailable = Boolean(recordingOption) && supportsRecordedSpeech();
 const browser = {
   name: navigator.userAgent.match(/Edg(?:A|iOS)?\//u) ? 'Edge' :
     /(?:Chrome|CriOS)\//u.test(navigator.userAgent) ? 'Chrome' :
@@ -27,9 +24,11 @@ const device = {
 const ios = /iPhone|iPad|iPod/u.test(browser.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-const iphoneCompatibilityAvailable = ios && Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
-
-const muteStartupAudio = new URLSearchParams(location.search).get('startup-audio') === 'muted';
+const params = new URLSearchParams(location.search);
+const manualEndTest = params.get('manual-end') === '1';
+const iphoneCompatibilityAvailable = ios && !manualEndTest &&
+  Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance);
+const muteStartupAudio = params.get('startup-audio') === 'muted';
 
 const STORAGE = 'order-signal-v1';
 let storageError = false;
@@ -147,6 +146,13 @@ function accuracyView(run, showTranscripts = true) {
   return root;
 }
 
+function inputName(run) {
+  const label = inputLabels[run.method];
+  if (run.manualEndTest) return label + ' · Manual end test';
+  if (run.iphoneCompatibility) return label + ' · Automatic end on iPhone';
+  return label;
+}
+
 function runRecord(run) {
   const { events, evaluation, ...rest } = run;
   return {
@@ -197,7 +203,8 @@ function renderCase() {
 function renderMethod() {
   const method = $('method').value;
   $('iphone-help').hidden = !iphoneCompatibilityAvailable || method !== 'live';
-  $('audio-area').hidden = method !== 'external' && method !== 'track';
+  $('manual-end-help').hidden = !manualEndTest || method !== 'live';
+  $('audio-area').hidden = method === 'live';
   $('file-label').hidden = method !== 'track';
   $('preview').hidden = method !== 'track' || !file;
   $('method-help').textContent = method === 'external'
@@ -225,33 +232,26 @@ function renderRun() {
   const busy = active();
   const ready = current?.state === 'finished';
   const method = $('method').value;
-  const recorded = method === 'recorded';
-  const supported = recorded ? recordingAvailable : Boolean(Recognition);
-  const canStart = supported && window.isSecureContext && (method !== 'track' || (trackAvailable && file));
+  const canStart = Recognition && window.isSecureContext && (method !== 'track' || (trackAvailable && file));
   const state = current?.state ?? 'idle';
   const statuses = {
-    idle: supported ? 'Idle' : 'Unavailable',
+    idle: Recognition ? 'Idle' : 'API unavailable',
     preparing: method === 'track' ? 'Preparing audio' : 'Starting…',
     starting: 'Starting…',
-    listening: recorded ? 'Recording' : 'Listening',
+    listening: 'Listening',
     stopping: 'Finishing',
-    loading: 'Loading speech model…',
-    transcribing: 'Transcribing…',
     finished: run?.success ? 'Complete' : 'Unsuccessful'
   };
   const status = $('status');
   if (status.textContent !== statuses[state]) status.textContent = statuses[state];
   status.dataset.state = state;
   const error = run?.errors.at(-1)?.message || (ready && run.termination === 'page-hidden' ? 'Recognition stopped when the page was hidden.' :
+    ready && run.manualEndTest && run.termination === 'browser' ? 'The browser ended recognition before you tapped End.' :
     ready && !run.transcripts.final.trim() ? 'No final transcript was returned.' :
     !window.isSecureContext ? 'Recognition requires HTTPS or localhost.' :
-    !supported ? (recorded ? 'This browser cannot record and transcribe on this device.'
-      : 'This browser does not expose the speech recognition API.') : '');
+    !Recognition ? 'This browser does not expose the speech recognition API.' : '');
   if ($('error').textContent !== error) $('error').textContent = error;
   $('error').hidden = !error;
-  $('transcript-help').textContent = recorded
-    ? 'Tap End to transcribe. The first run downloads about 58 MB of model and runtime files.'
-    : 'Text appears as you speak. Edit it here after recognition ends.';
   const compatibility = Boolean(run?.iphoneCompatibility);
   const captureHint = current?.waitingForResult
     ? compatibility
@@ -269,14 +269,10 @@ function renderRun() {
         preparing: 'Cancel', starting: 'Starting…',
         listening: current.waitingForResult ? 'Cancel stalled run' : 'Ends automatically', stopping: 'Finishing…'
       }
-    : {
-        preparing: 'Cancel', starting: 'End recognition', listening: recorded ? 'End' : 'End recognition',
-        stopping: 'Finishing…', loading: 'Loading…', transcribing: 'Transcribing…'
-      };
-  $('start-label').textContent = labels[state] ?? (recorded ? 'Start' : method === 'track' ? 'Test audio file' : 'Start recognition');
+    : { preparing: 'Cancel audio setup', starting: 'End recognition', listening: 'End recognition', stopping: 'Finishing…' };
+  $('start-label').textContent = labels[state] ?? (method === 'track' ? 'Test audio file' : 'Start recognition');
   $('start').disabled = busy
-    ? ['stopping', 'loading', 'transcribing'].includes(state) ||
-      (compatibility && state !== 'preparing' && !current.waitingForResult)
+    ? state === 'stopping' || (compatibility && state !== 'preparing' && !current.waitingForResult)
     : !canStart;
   for (const id of ['language', 'method', 'case-select', 'mode', 'fillers', 'audio-file', 'next', 'repeat', 'mixed-case', 'new-session', 'queue', 'network', 'environment']) $(id).disabled = busy;
   renderSave();
@@ -286,7 +282,7 @@ function renderRun() {
   const value = ready ? (run.editedTranscript ?? run.transcripts.final) : (run?.transcripts?.full ?? '');
   if (transcript.value !== value) transcript.value = value;
   $('reset').disabled = !canReset();
-  $('latencies').replaceChildren(...Object.entries(recorded ? recordingLatencyLabels : browserLatencyLabels).map(([key, label]) => metric(label, ms(run?.latency[key]))));
+  $('latencies').replaceChildren(...Object.entries(browserLatencyLabels).map(([key, label]) => metric(label, ms(run?.latency[key]))));
   const events = run?.events ?? [];
   $('event-count').textContent = '(' + events.length + ')';
   const eventLabels = {
@@ -331,6 +327,8 @@ function queueIds() {
 }
 const configuration = () => ({
   language: $('language').value, method: $('method').value,
+  manualEndTest: manualEndTest && $('method').value === 'live',
+  iosAudioSessionTest: ios && manualEndTest && $('method').value === 'live',
   iphoneCompatibility: iphoneCompatibilityAvailable && $('method').value === 'live',
   mutedStartupAudio: muteStartupAudio && iphoneCompatibilityAvailable && $('method').value === 'live',
   network: $('network').value.trim(), environment: $('environment').value
@@ -349,6 +347,8 @@ function sessionForRun() {
   if (!session) return makeSession();
   const previous = {
     ...session,
+    manualEndTest: Boolean(session.manualEndTest),
+    iosAudioSessionTest: Boolean(session.iosAudioSessionTest),
     iphoneCompatibility: Boolean(session.iphoneCompatibility),
     mutedStartupAudio: Boolean(session.mutedStartupAudio)
   };
@@ -369,18 +369,16 @@ function startRun() {
     scoring: { mode: $('mode').value, fillers: $('fillers').value.split(',').map(value => value.trim()).filter(Boolean) },
     events: [], errors: [], manualStop: false, termination: null
   };
-  const update = () => {
+  current = new RecognitionRun(Recognition, run, () => {
     if (current?.run !== run) return;
     if (current.state === 'finished') {
       run.success = Boolean(run.transcripts.final.trim()) && !run.errors.length &&
-        ['manual', 'browser', 'audio-ended'].includes(run.termination);
+        (run.manualEndTest ? run.termination === 'manual' && run.events.some(event => event.name === 'onend')
+          : ['manual', 'browser', 'audio-ended'].includes(run.termination));
       run.evaluation = score(run.reference, run.transcripts.final, run.criticalTerms, run.scoring);
     }
     renderRun();
-  };
-  current = run.method === 'recorded'
-    ? new RecordedSpeechRun(run, update)
-    : new RecognitionRun(Recognition, run, update);
+  });
   current.start(file);
 }
 
@@ -479,7 +477,6 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => current?.abort('page-hidden'));
 $('support-info').replaceWith(detailsList([
-  ...(recordingOption ? [['On-device recording', recordingAvailable ? 'Available' : 'Unavailable']] : []),
   ['Recognition API', Recognition ? (window.SpeechRecognition ? 'Standard constructor detected' : 'Prefixed constructor detected') : 'Unavailable'],
   ['Secure context', window.isSecureContext ? 'Yes' : 'No'],
   ['AudioTrack candidate', trackAvailable ? 'Eligible · actual recognition unverified' : 'Unavailable in this configuration'],
@@ -488,10 +485,9 @@ $('support-info').replaceWith(detailsList([
   ['User agent', browser.userAgent]
 ]));
 
-$('method').value = 'live';
 if (session) {
   $('language').value = session.language;
-  if (['external', 'track'].includes(session.method)) $('method').value = session.method;
+  if (!manualEndTest && ['external', 'track'].includes(session.method)) $('method').value = session.method;
   $('network').value = session.network;
   $('environment').value = session.environment;
 }
@@ -614,19 +610,17 @@ function breakdown(runs) {
   return {
     language: groupMetrics(runs, run => run.language),
     browser: groupMetrics(runs, run => browserText(run.browser)),
-    input: groupMetrics(runs, run => inputLabels[run.method]),
-    languageAndInput: groupMetrics(runs, run => run.language + ' · ' + inputLabels[run.method]),
-    browserAndInput: groupMetrics(runs, run => browserText(run.browser) + ' · ' + inputLabels[run.method])
+    input: groupMetrics(runs, inputName),
+    languageAndInput: groupMetrics(runs, run => run.language + ' · ' + inputName(run)),
+    browserAndInput: groupMetrics(runs, run => browserText(run.browser) + ' · ' + inputName(run))
   };
 }
 
-const overviewColumns = ['Group', 'Runs', 'Success rate', 'Average WER', 'Median WER', 'Average MER', 'Median MER',
-  'First result P50', 'First result P95', 'End → transcript P50', 'End → transcript P95', 'Critical terms'];
+const overviewColumns = ['Group', 'Runs', 'Success rate', 'Average WER', 'Median WER', 'Average MER', 'Median MER', 'First result P50', 'First result P95', 'Critical terms'];
 const overviewRow = (label, metrics) => [
   label, metrics.total, pct(metrics.successRate), pct(metrics.wer.average), pct(metrics.wer.p50),
   pct(metrics.mer.average), pct(metrics.mer.p50),
-  ms(metrics.latency.firstResult.p50), ms(metrics.latency.firstResult.p95),
-  ms(metrics.latency.endToTranscript.p50), ms(metrics.latency.endToTranscript.p95), pct(metrics.critical.rate)
+  ms(metrics.latency.firstResult.p50), ms(metrics.latency.firstResult.p95), pct(metrics.critical.rate)
 ];
 
 function historicalRun(run) {
@@ -634,7 +628,7 @@ function historicalRun(run) {
   entry.append(el('summary', [run.caseId, run.success ? 'Recognized' : 'Failed', pct(errorValue(run.evaluation)) + ' ' + errorMetric(run.evaluation), localDate(run.startedAt)].join(' · ')),
     detailsList([
       ['Browser / device', browserText(run.browser) + ' · ' + (run.device.platform || 'Unknown')],
-      ['Input', inputLabels[run.method] + (run.iphoneCompatibility ? ' · Automatic end on iPhone' : '')],
+      ['Input', inputName(run)],
       ['Language', run.language],
       ['Network', run.network || 'Unspecified'],
       ['Environment', run.environment],
@@ -681,7 +675,7 @@ function renderHistory() {
     metric('Average WER', pct(total.wer.average)), metric('Median WER', pct(total.wer.p50)),
     metric('Average MER', pct(total.mer.average)), metric('Median MER', pct(total.mer.p50)),
     metric('Critical phrase matches', pct(total.critical.rate)));
-  root.append(el('p', visible.length + ' session(s) · ' + [...new Set(runs.map(run => inputLabels[run.method]))].join(' / '), 'muted'), stats);
+  root.append(el('p', visible.length + ' session(s) · ' + [...new Set(runs.map(inputName))].join(' / '), 'muted'), stats);
   const groups = breakdown(runs);
   for (const [title, entries] of [
     ['By input method', groups.input], ['By language', groups.language], ['By browser', groups.browser],
@@ -702,7 +696,7 @@ function renderHistory() {
     const comparison = el('section', '', 'ruled');
     comparison.append(el('h2', 'Saved session comparison'),
       table(overviewColumns, [...sessions].reverse().map(item => overviewRow(
-        [sessionName(item), browserText(item.browser), item.language, inputLabels[item.method], item.environment, item.network || 'Network unspecified'].join(' · '),
+        [sessionName(item), browserText(item.browser), item.language, inputName(item), item.environment, item.network || 'Network unspecified'].join(' · '),
         aggregate(item.runs))), 'Saved session comparison'));
     root.append(comparison);
   }
@@ -711,7 +705,7 @@ function renderHistory() {
   for (const item of [...visible].reverse()) {
     const group = el('details', '', 'run-item');
     group.open = visible.length === 1;
-    group.append(el('summary', sessionName(item) + ' · ' + inputLabels[item.method] + ' · ' + item.runs.length + ' runs'),
+    group.append(el('summary', sessionName(item) + ' · ' + inputName(item) + ' · ' + item.runs.length + ' runs'),
       ...[...item.runs].reverse().map(historicalRun));
     list.append(group);
   }
@@ -729,7 +723,7 @@ function metricsExport() {
   const runs = selection.flatMap(item => item.runs);
   return {
     exportedAt: new Date().toISOString(), sessionIds: selection.map(item => item.id),
-    inputs: [...new Set(runs.map(run => inputLabels[run.method]))],
+    inputs: [...new Set(runs.map(inputName))],
     overall: aggregate(runs), ...breakdown(runs),
     sessions: selection.map(item => ({ group: item.id, method: item.method, ...aggregate(item.runs) }))
   };

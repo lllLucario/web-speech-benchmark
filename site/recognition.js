@@ -2,7 +2,7 @@ import { collectResults, timings, transcripts } from './benchmark.js';
 
 export const inputLabels = {
   recorded: 'Manual recording · on-device transcription',
-  live: 'Browser speech',
+  live: 'Web Speech API',
   external: 'External audio playback',
   track: 'AudioTrack'
 };
@@ -115,6 +115,7 @@ export class RecognitionRun {
       recognition.onend = () => {
         if (this.state === 'finished') return;
         this.log('onend');
+        if (this.run.iosAudioSessionTest && this.run.manualStop && !this.closing) this.resetAudioSession();
         this.finish(this.run.termination ?? 'browser');
       };
 
@@ -145,6 +146,22 @@ export class RecognitionRun {
       this.log('startException', { code, message: error.message });
       this.fail(code, this.run.method === 'track' ? 'AudioTrack could not start. ' + error.message : error.message);
       this.finish('start-error');
+    }
+  }
+
+  resetAudioSession() {
+    const session = globalThis.navigator?.audioSession;
+    if (!session || session.type !== 'auto') {
+      this.log('audioSessionResetSkipped', { type: session?.type ?? null });
+      return;
+    }
+    // Test whether reapplying the default audio routing helps the next iOS recognition session.
+    try {
+      session.type = 'playback';
+      session.type = 'auto';
+      this.log('audioSessionReset');
+    } catch (error) {
+      this.log('audioSessionResetError', { message: error.message });
     }
   }
 

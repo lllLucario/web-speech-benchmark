@@ -5,10 +5,7 @@ import { extname, resolve } from 'node:path';
 const root = resolve(process.argv[2] || 'dist');
 const base = process.env.BASE_PATH || '/';
 const port = Number(process.env.PORT || 4173);
-const mime = {
-  '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
-  '.css': 'text/css', '.json': 'application/json', '.wasm': 'application/wasm'
-};
+const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 
 createServer(async (request, response) => {
   try {
